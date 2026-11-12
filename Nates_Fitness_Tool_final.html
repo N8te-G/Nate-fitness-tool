@@ -11,6 +11,15 @@
     <meta name="mobile-web-app-capable" content="yes">
     <link id="dynamicManifestLink" rel="manifest" href="./manifest.json">
     <link id="dynamicTouchIconLink" rel="apple-touch-icon" href="./icon-192.png">
+    <script>
+        // Theme: dark by default; switch to light only if the user chose it
+        try {
+            if (localStorage.getItem('theme') === 'light') {
+                document.documentElement.classList.remove('dark');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f8fafc');
+            }
+        } catch (_) {}
+    </script>
     <title>Nate's Fitness Tool — TCX & GPX Fitness Data Comparator</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -54,6 +63,9 @@
             height: 8px;
         }
         ::-webkit-scrollbar-track {
+            background: rgba(226, 232, 240, 0.6);
+        }
+        .dark ::-webkit-scrollbar-track {
             background: rgba(15, 23, 42, 0.4);
         }
         ::-webkit-scrollbar-thumb {
@@ -100,6 +112,11 @@
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">Multi-device Heart Rate, GPS & Elevation Comparison</p>
                 </div>
             </div>
+            <button id="themeToggleBtn" type="button" title="Switch between light and dark theme" aria-label="Switch to light theme" class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-amber-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer">
+                <!-- Moon shown in light mode, sun shown in dark mode -->
+                <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+            </button>
         </div>
     </header>
 
@@ -5323,8 +5340,31 @@
             });
         }
 
+        // Light / dark theme toggle (dark is the default; choice is remembered)
+        function applyTheme(theme) {
+            const isDark = theme !== 'light';
+            document.documentElement.classList.toggle('dark', isDark);
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#f8fafc');
+            const btn = document.getElementById('themeToggleBtn');
+            if (btn) btn.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+            try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (_) {}
+            // Charts read their colours from the current theme when drawn
+            if (typeof Chart !== 'undefined') renderCharts();
+        }
+
+        function initThemeToggle() {
+            const btn = document.getElementById('themeToggleBtn');
+            if (!btn) return;
+            btn.setAttribute('aria-label', document.documentElement.classList.contains('dark') ? 'Switch to light theme' : 'Switch to dark theme');
+            btn.addEventListener('click', () => {
+                applyTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark');
+            });
+        }
+
         // Initialize App on DOM Ready
         window.addEventListener('DOMContentLoaded', () => {
+            initThemeToggle();
             if (typeof lucide !== 'undefined') lucide.createIcons();
             initPWAAndOfflineEngine();
             initMap();
