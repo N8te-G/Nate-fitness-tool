@@ -4139,7 +4139,7 @@
                     };
                 };
 
-                // PASS 1: Plot each track's continuous GPS polyline & 1 km splits
+                // PASS 1: Plot each track's continuous GPS polyline
                 activeTracks.forEach((trk, tIdx) => {
                     const gpsPts = trk.points.filter(p => p.lat != null && p.lon != null);
                     if (gpsPts.length < 2) return;
@@ -4165,30 +4165,6 @@
                     ctx.strokeStyle = trk.color;
                     ctx.lineWidth = 4.6;
                     ctx.stroke();
-
-                    // Optional 1 km Split Markers along primary track
-                    if (showSplits && tIdx === 0) {
-                        let nextKm = 1000;
-                        for (let i = 1; i < gpsPts.length; i++) {
-                            if (gpsPts[i].distMeters >= nextKm) {
-                                const pos = projectLatLon(gpsPts[i].lat, gpsPts[i].lon);
-                                const kmNum = Math.round(nextKm / 1000);
-                                ctx.beginPath();
-                                ctx.arc(pos.x, pos.y, 13, 0, Math.PI * 2);
-                                ctx.fillStyle = isDark ? '#0f172a' : '#ffffff';
-                                ctx.fill();
-                                ctx.lineWidth = 2.5;
-                                ctx.strokeStyle = trk.color;
-                                ctx.stroke();
-
-                                ctx.fillStyle = textMain;
-                                ctx.font = 'bold 12px JetBrains Mono, monospace';
-                                ctx.textAlign = 'center';
-                                ctx.fillText(`${kmNum}k`, pos.x, pos.y + 4);
-                                nextKm += 1000;
-                            }
-                        }
-                    }
                 });
 
                 // PASS 2: Plot Numbered Drift Hotspot Callout Badges (#1 - #4) on the Main Map
@@ -4250,6 +4226,32 @@
                     ctx.lineWidth = 3;
                     ctx.strokeStyle = '#ffffff';
                     ctx.stroke();
+                }
+
+                // PASS 3B: 1 km Split Markers along primary track — drawn after ALL tracks so no track covers them
+                const splitTrk = activeTracks[0];
+                const splitPts = splitTrk.points.filter(p => p.lat != null && p.lon != null);
+                if (showSplits && splitPts.length > 1) {
+                    let nextKm = 1000;
+                    for (let i = 1; i < splitPts.length; i++) {
+                        if (splitPts[i].distMeters >= nextKm) {
+                            const pos = projectLatLon(splitPts[i].lat, splitPts[i].lon);
+                            const kmNum = Math.round(nextKm / 1000);
+                            ctx.beginPath();
+                            ctx.arc(pos.x, pos.y, 13, 0, Math.PI * 2);
+                            ctx.fillStyle = isDark ? '#0f172a' : '#ffffff';
+                            ctx.fill();
+                            ctx.lineWidth = 2.5;
+                            ctx.strokeStyle = splitTrk.color;
+                            ctx.stroke();
+
+                            ctx.fillStyle = textMain;
+                            ctx.font = 'bold 12px JetBrains Mono, monospace';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`${kmNum}k`, pos.x, pos.y + 4);
+                            nextKm += 1000;
+                        }
+                    }
                 }
 
                 // PASS 4 (TOP LAYER): Render all GPS Dropout Dashes & Callout Badges last so they sit above all tracks
