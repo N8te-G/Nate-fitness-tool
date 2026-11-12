@@ -2759,8 +2759,12 @@
             }
             state.map = L.map('mapContainer', { zoomControl: true }).setView([51.5055, -0.1650], 14);
             updateMapTheme();
+            const savedMapStyle = loadPref('mapLayer');
             if (!navigator.onLine) {
                 setDashboardMapStyle('grid');
+            } else if (savedMapStyle && savedMapStyle !== state.dashboardMapStyle &&
+                document.querySelector(`.dashboard-mapstyle-btn[data-mapstyle="${savedMapStyle}"]`)) {
+                setDashboardMapStyle(savedMapStyle);
             }
         }
 
@@ -5249,6 +5253,7 @@
             document.querySelectorAll('.dashboard-mapstyle-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     setDashboardMapStyle(btn.dataset.mapstyle);
+                    savePref('mapLayer', btn.dataset.mapstyle);
                 });
             });
 
@@ -5342,6 +5347,29 @@
             });
         }
 
+        // Remembered user preferences (stored in this browser only)
+        function loadPref(key) {
+            try { return localStorage.getItem('nft.' + key); } catch (_) { return null; }
+        }
+        function savePref(key, value) {
+            try { localStorage.setItem('nft.' + key, value); } catch (_) {}
+        }
+
+        // Restore & remember export settings: GPS map background, GPS report theme, HR report style
+        function initRememberedExportSettings() {
+            [
+                ['gpsExportBgTypeSelect', 'gpsExportMapLayer'],
+                ['gpsExportThemeSelect', 'gpsExportTheme'],
+                ['exportThemeSelect', 'hrExportTheme']
+            ].forEach(([id, key]) => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const saved = loadPref(key);
+                if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+                sel.addEventListener('change', () => savePref(key, sel.value));
+            });
+        }
+
         // Light / dark theme toggle (dark is the default; choice is remembered)
         function applyTheme(theme) {
             const isDark = theme !== 'light';
@@ -5367,6 +5395,7 @@
         // Initialize App on DOM Ready
         window.addEventListener('DOMContentLoaded', () => {
             initThemeToggle();
+            initRememberedExportSettings();
             if (typeof lucide !== 'undefined') lucide.createIcons();
             initPWAAndOfflineEngine();
             initMap();
