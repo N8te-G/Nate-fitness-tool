@@ -606,52 +606,52 @@
     <!-- High-Resolution Chart Image Export Modal -->
     <div id="exportModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-8">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+            <div class="flex items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div class="flex items-start sm:items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
                         <i data-lucide="image-down" class="w-5 h-5"></i>
                     </div>
-                    <div>
-                        <h3 class="text-base font-bold">Export High-Resolution Heart Rate Report (PNG)</h3>
+                    <div class="min-w-0">
+                        <h3 class="text-sm sm:text-base font-bold">Export High-Resolution Heart Rate Report (PNG)</h3>
                         <p class="text-xs text-slate-500 dark:text-slate-400">2400 × 1500 px ultra-crisp chart with full data density, device legend & match statistics</p>
                     </div>
                 </div>
-                <button id="closeExportModalBtn" class="self-end sm:self-center p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <button id="closeExportModalBtn" class="shrink-0 -mt-1 -mr-1 sm:mt-0 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
 
             <!-- Export Customization Toolbar -->
             <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
-                <div class="flex flex-wrap items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto lg:flex-1 min-w-0">
                     <!-- Custom Report Title -->
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Title:</span>
-                        <input id="exportTitleInput" type="text" value="Nate's Fitness Tool — Heart Rate Comparison" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium w-56 focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                    <div class="flex items-center gap-2 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Title:</span>
+                        <input id="exportTitleInput" type="text" value="Nate's Fitness Tool — Heart Rate Comparison" class="flex-1 sm:flex-none min-w-0 sm:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500" />
                     </div>
 
                     <!-- Export Comparison Mode Toggle -->
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Mode:</span>
-                        <select id="exportCompareModeSelect" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-rose-600 dark:text-rose-400 focus:outline-none cursor-pointer">
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Mode:</span>
+                        <select id="exportCompareModeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-rose-600 dark:text-rose-400 focus:outline-none cursor-pointer">
                             <option value="pairwise">Pairwise (A vs B)</option>
                             <option value="reference">Reference vs All (1 vs Many)</option>
                         </select>
                     </div>
 
                     <!-- Export Theme Toggle -->
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Style:</span>
-                        <select id="exportThemeSelect" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none">
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Style:</span>
+                        <select id="exportThemeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none">
                             <option value="dark">Dark Studio Theme</option>
                             <option value="light">Clean White Paper Theme</option>
                         </select>
                     </div>
 
                     <!-- Resolution Density -->
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Point Density:</span>
-                        <select id="exportDensitySelect" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none">
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Point Density:</span>
+                        <select id="exportDensitySelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none">
                             <option value="all">Every Point (100% Detail + Node Dots)</option>
                             <option value="clean">Every Point (Crisp Line Only)</option>
                         </select>
@@ -664,7 +664,7 @@
                     </label>
                 </div>
 
-                <button id="downloadExportPngBtn" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-500/25 transition-all cursor-pointer">
+                <button id="downloadExportPngBtn" class="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-500/25 transition-all cursor-pointer">
                     <i data-lucide="download" class="w-4 h-4"></i>
                     <span>Download PNG Image</span>
                 </button>
@@ -680,43 +680,43 @@
     <!-- High-Resolution GPS Map & Dropout Report Image Export Modal -->
     <div id="gpsExportModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-8">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+            <div class="flex items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div class="flex items-start sm:items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
                         <i data-lucide="map" class="w-5 h-5"></i>
                     </div>
-                    <div>
-                        <h3 class="text-base font-bold">Export High-Resolution GPS Track & Dropout Report (PNG)</h3>
+                    <div class="min-w-0">
+                        <h3 class="text-sm sm:text-base font-bold">Export High-Resolution GPS Track & Dropout Report (PNG)</h3>
                         <p class="text-xs text-slate-500 dark:text-slate-400">2400 × 1780 px vector & tile map report with 4 zoomed max-drift hotspot boxes, dropout locations & offset curve</p>
                     </div>
                 </div>
-                <button id="closeGpsExportModalBtn" class="self-end sm:self-center p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <button id="closeGpsExportModalBtn" class="shrink-0 -mt-1 -mr-1 sm:mt-0 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
 
             <!-- GPS Export Customization Toolbar -->
             <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
-                <div class="flex flex-wrap items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto lg:flex-1 min-w-0">
                     <!-- Custom Report Title -->
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Title:</span>
-                        <input id="gpsExportTitleInput" type="text" value="Nate's Fitness Tool — GPS Track & Dropout Comparison" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium w-52 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                    <div class="flex items-center gap-2 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Title:</span>
+                        <input id="gpsExportTitleInput" type="text" value="Nate's Fitness Tool — GPS Track & Dropout Comparison" class="flex-1 sm:flex-none min-w-0 sm:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                     </div>
 
                     <!-- GPS Export Comparison Mode Toggle -->
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Mode:</span>
-                        <select id="gpsExportCompareModeSelect" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-indigo-600 dark:text-indigo-400 focus:outline-none cursor-pointer">
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Mode:</span>
+                        <select id="gpsExportCompareModeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-indigo-600 dark:text-indigo-400 focus:outline-none cursor-pointer">
                             <option value="pairwise">Pairwise (A vs B)</option>
                             <option value="reference">Reference vs All (1 vs Many)</option>
                         </select>
                     </div>
                     <!-- Map Background Selector (Street Map default — most compatible tile source) -->
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Map Background:</span>
-                        <select id="gpsExportBgTypeSelect" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-                            <option value="osm" selected>Street Map (Esri / OSM) — Recommended</option>
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Map Background:</span>
+                        <select id="gpsExportBgTypeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+                            <option value="osm" selected>Street Map (Recommended)</option>
                             <option value="blank">Blank / Vector Grid</option>
                             <option value="osm_classic">OpenStreetMap Classic</option>
                             <option value="satellite">Satellite Imagery (Esri World)</option>
@@ -724,9 +724,9 @@
                     </div>
 
                     <!-- Export Theme Toggle -->
-                    <div class="flex items-center gap-1.5 text-xs">
-                        <span class="text-slate-500 dark:text-slate-400 font-medium">Report Theme:</span>
-                        <select id="gpsExportThemeSelect" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none cursor-pointer">
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Report Theme:</span>
+                        <select id="gpsExportThemeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none cursor-pointer">
                             <option value="dark">Dark Radar Studio Theme</option>
                             <option value="light">Clean White Paper Theme</option>
                         </select>
@@ -757,9 +757,9 @@
                     </label>
                 </div>
 
-                <div class="flex items-center gap-2.5">
+                <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
                     <span id="gpsExportTileStatus" class="hidden text-xs font-mono text-amber-400 animate-pulse">Loading map tiles...</span>
-                    <button id="downloadGpsExportPngBtn" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/25 transition-all cursor-pointer">
+                    <button id="downloadGpsExportPngBtn" class="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/25 transition-all cursor-pointer">
                         <i data-lucide="download" class="w-4 h-4"></i>
                         <span>Download GPS Comparison PNG</span>
                     </button>
