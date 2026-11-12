@@ -712,12 +712,12 @@
                             <option value="reference">Reference vs All (1 vs Many)</option>
                         </select>
                     </div>
-                    <!-- Map Background Selector (Blank / Street Map / OSM Classic / Satellite) -->
+                    <!-- Map Background Selector (Street Map default — most compatible tile source) -->
                     <div class="flex items-center gap-1.5 text-xs">
                         <span class="text-slate-500 dark:text-slate-400 font-medium">Map Background:</span>
                         <select id="gpsExportBgTypeSelect" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+                            <option value="osm" selected>Street Map (Esri / OSM) — Recommended</option>
                             <option value="blank">Blank / Vector Grid</option>
-                            <option value="osm">Street Map (Esri / OSM)</option>
                             <option value="osm_classic">OpenStreetMap Classic</option>
                             <option value="satellite">Satellite Imagery (Esri World)</option>
                         </select>
