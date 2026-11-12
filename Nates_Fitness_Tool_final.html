@@ -43,7 +43,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@1.62.0"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -758,10 +758,8 @@
 
     <script>
         /********************************************************************
-         * PWA MANIFEST, DYNAMIC ICON GENERATOR, ZIP BUILDER & OFFLINE ENGINE
+         * PWA MANIFEST, DYNAMIC ICON GENERATOR & OFFLINE ENGINE
          ********************************************************************/
-        let deferredInstallPrompt = null;
-
         function generateAppIconDataURL(size = 512) {
             const canvas = document.createElement('canvas');
             canvas.width = size;
@@ -823,253 +821,10 @@
             return canvas.toDataURL('image/png');
         }
 
-        function dataURLToUint8Array(dataURL) {
-            const base64 = dataURL.split(',')[1];
-            const binary = atob(base64);
-            const len = binary.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
-            return bytes;
-        }
-
-        // Pure-JS Uncompressed ZIP Archive Builder (Zero external dependencies)
-        function createZipArchiveBlob(files) {
-            // Precompute CRC32 table
-            const crcTable = new Uint32Array(256);
-            for (let n = 0; n < 256; n++) {
-                let c = n;
-                for (let k = 0; k < 8; k++) {
-                    c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-                }
-                crcTable[n] = c >>> 0;
-            }
-
-            function crc32(bytes) {
-                let c = 0xffffffff;
-                for (let i = 0; i < bytes.length; i++) {
-                    c = crcTable[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-                }
-                return (c ^ 0xffffffff) >>> 0;
-            }
-
-            const encoder = new TextEncoder();
-            const fileRecords = [];
-            let offset = 0;
-
-            for (const f of files) {
-                const nameBytes = encoder.encode(f.name);
-                const dataBytes = (f.data instanceof Uint8Array) ? f.data : encoder.encode(String(f.data));
-                const crc = crc32(dataBytes);
-                const size = dataBytes.length;
-
-                // Local File Header (30 bytes + file name)
-                const localHeader = new Uint8Array(30 + nameBytes.length);
-                const lv = new DataView(localHeader.buffer);
-                lv.setUint32(0, 0x04034b50, true); // Signature
-                lv.setUint16(4, 20, true);         // Version needed (2.0)
-                lv.setUint16(6, 0, true);          // Flags
-                lv.setUint16(8, 0, true);          // Compression (0 = Store)
-                lv.setUint16(10, 0, true);         // Mod time
-                lv.setUint16(12, 0, true);         // Mod date
-                lv.setUint32(14, crc, true);       // CRC32
-                lv.setUint32(18, size, true);      // Compressed size
-                lv.setUint32(22, size, true);      // Uncompressed size
-                lv.setUint16(26, nameBytes.length, true); // Filename length
-                lv.setUint16(28, 0, true);         // Extra field length
-                localHeader.set(nameBytes, 30);
-
-                fileRecords.push({
-                    nameBytes,
-                    dataBytes,
-                    crc,
-                    size,
-                    localHeader,
-                    offset
-                });
-
-                offset += localHeader.length + size;
-            }
-
-            // Build Central Directory
-            const centralChunks = [];
-            let centralSize = 0;
-
-            for (const rec of fileRecords) {
-                const cdHeader = new Uint8Array(46 + rec.nameBytes.length);
-                const cv = new DataView(cdHeader.buffer);
-                cv.setUint32(0, 0x02014b50, true); // Central directory signature
-                cv.setUint16(4, 20, true);         // Version made by
-                cv.setUint16(6, 20, true);         // Version needed
-                cv.setUint16(8, 0, true);          // Flags
-                cv.setUint16(10, 0, true);         // Compression (0 = Store)
-                cv.setUint16(12, 0, true);         // Mod time
-                cv.setUint16(14, 0, true);         // Mod date
-                cv.setUint32(16, rec.crc, true);   // CRC32
-                cv.setUint32(20, rec.size, true);  // Compressed size
-                cv.setUint32(24, rec.size, true);  // Uncompressed size
-                cv.setUint16(28, rec.nameBytes.length, true); // Filename length
-                cv.setUint16(30, 0, true);         // Extra length
-                cv.setUint16(32, 0, true);         // Comment length
-                cv.setUint16(34, 0, true);         // Disk number
-                cv.setUint16(36, 0, true);         // Internal attrs
-                cv.setUint32(38, 0, true);         // External attrs
-                cv.setUint32(42, rec.offset, true);// Relative offset of local header
-                cdHeader.set(rec.nameBytes, 46);
-
-                centralChunks.push(cdHeader);
-                centralSize += cdHeader.length;
-            }
-
-            // End of Central Directory Record (22 bytes)
-            const eocd = new Uint8Array(22);
-            const ev = new DataView(eocd.buffer);
-            ev.setUint32(0, 0x06054b50, true);           // EOCD signature
-            ev.setUint16(4, 0, true);                    // Disk number
-            ev.setUint16(6, 0, true);                    // Start disk
-            ev.setUint16(8, fileRecords.length, true);   // Entries on disk
-            ev.setUint16(10, fileRecords.length, true);  // Total entries
-            ev.setUint32(12, centralSize, true);         // Size of central directory
-            ev.setUint32(16, offset, true);              // Offset of start of central directory
-            ev.setUint16(20, 0, true);                   // Comment length
-
-            const blobParts = [];
-            for (const rec of fileRecords) {
-                blobParts.push(rec.localHeader, rec.dataBytes);
-            }
-            for (const cd of centralChunks) {
-                blobParts.push(cd);
-            }
-            blobParts.push(eocd);
-
-            return new Blob(blobParts, { type: 'application/zip' });
-        }
-
-        // Generate Ready-to-Host PWA Folder (.zip) with physical manifest.json, sw.js & icons
-        async function downloadReadyToHostPwaZip() {
-            const btn = document.getElementById('downloadPwaZipBtn');
-            const progress = document.getElementById('pwaZipProgressText');
-            btn.disabled = true;
-            progress.classList.remove('hidden');
-            progress.textContent = 'Generating icons, manifest.json, sw.js & index.html...';
-
-            try {
-                const icon192DataUrl = generateAppIconDataURL(192);
-                const icon512DataUrl = generateAppIconDataURL(512);
-                const icon192Bytes = dataURLToUint8Array(icon192DataUrl);
-                const icon512Bytes = dataURLToUint8Array(icon512DataUrl);
-
-                // Physical manifest.json for Chrome WebAPK installation
-                const manifestObj = {
-                    name: "Nate's Fitness Tool",
-                    short_name: "NateFitness",
-                    description: "Offline-ready Multi-device TCX & GPX Heart Rate, GPS & Elevation Comparison Tool",
-                    start_url: "./index.html",
-                    scope: "./",
-                    display: "standalone",
-                    orientation: "any",
-                    background_color: "#0f172a",
-                    theme_color: "#0f172a",
-                    icons: [
-                        { src: "./icon-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
-                        { src: "./icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
-                    ]
-                };
-                const manifestJsonStr = JSON.stringify(manifestObj, null, 2);
-
-                // Physical Service Worker (sw.js) for true offline caching & Chrome PWA installability
-                const swJsStr = `const CACHE_NAME = 'nates-fitness-tool-pwa-v3';
-const CORE_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://unpkg.com/lucide@latest'
-];
-
-self.addEventListener('install', event => {
-  self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(CORE_ASSETS).catch(() => {}))
-  );
-});
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-    )).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone)).catch(() => {});
-        }
-        return response;
-      }).catch(() => cached);
-    })
-  );
-});
-`;
-
-                // Build clean index.html that points to ./manifest.json and ./sw.js
-                let htmlSource = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-                htmlSource = htmlSource.replace(
-                    /<link id="dynamicManifestLink"[^>]*>/i,
-                    '<link id="dynamicManifestLink" rel="manifest" href="./manifest.json">'
-                );
-                htmlSource = htmlSource.replace(
-                    /<link id="dynamicTouchIconLink"[^>]*>/i,
-                    '<link id="dynamicTouchIconLink" rel="apple-touch-icon" href="./icon-192.png">'
-                );
-
-                const zipBlob = createZipArchiveBlob([
-                    { name: 'index.html', data: htmlSource },
-                    { name: 'manifest.json', data: manifestJsonStr },
-                    { name: 'sw.js', data: swJsStr },
-                    { name: 'icon-192.png', data: icon192Bytes },
-                    { name: 'icon-512.png', data: icon512Bytes }
-                ]);
-
-                const url = URL.createObjectURL(zipBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'nates-fitness-tool-pwa.zip';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                progress.textContent = '✓ Downloaded nates-fitness-tool-pwa.zip!';
-                showToast('Downloaded Ready-to-Host PWA .zip! Drop it onto app.netlify.com/drop.');
-            } catch (err) {
-                console.error('Error building PWA ZIP:', err);
-                showToast('Error creating ZIP archive.');
-            } finally {
-                btn.disabled = false;
-                setTimeout(() => progress.classList.add('hidden'), 6000);
-            }
-        }
-
         function initPWAAndOfflineEngine() {
             try {
                 const icon192 = generateAppIconDataURL(192);
                 const icon512 = generateAppIconDataURL(512);
-
-                const previewImg = document.getElementById('generatedAppIconPreview');
-                if (previewImg) previewImg.src = icon192;
 
                 const touchIconLink = document.getElementById('dynamicTouchIconLink');
                 if (touchIconLink) touchIconLink.href = icon192;
@@ -1095,10 +850,7 @@ self.addEventListener('fetch', event => {
 
             // Register Service Worker: try physical ./sw.js first (for 1-click Chrome PWA install), then blob fallback
             if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-                navigator.serviceWorker.register('./sw.js').then(() => {
-                    const statusEl = document.getElementById('swCacheStatusText');
-                    if (statusEl) statusEl.textContent = 'Physical Service Worker (sw.js) active — 1-Click Install Ready!';
-                }).catch(() => {
+                navigator.serviceWorker.register('./sw.js').catch(() => {
                     const swCode = `
                         const CACHE_NAME = 'nates-fitness-tool-v2';
                         self.addEventListener('install', event => self.skipWaiting());
@@ -1114,28 +866,6 @@ self.addEventListener('fetch', event => {
                     } catch (_) {}
                 });
             }
-
-            // Listen for Android Chrome native beforeinstallprompt
-            window.addEventListener('beforeinstallprompt', e => {
-                e.preventDefault();
-                deferredInstallPrompt = e;
-                const installBtn = document.getElementById('openInstallModalBtn');
-                const mainLabel = document.getElementById('mainInstallBtnLabel');
-                const modalInstallLabel = document.getElementById('nativeInstallBtnText');
-                if (installBtn) {
-                    installBtn.classList.add('ring-2', 'ring-emerald-400', 'ring-offset-2', 'dark:ring-offset-slate-900', 'animate-pulse');
-                }
-                if (mainLabel) mainLabel.textContent = 'Install App Now (1-Click)';
-                if (modalInstallLabel) modalInstallLabel.textContent = 'Install App Now (1-Click Ready!)';
-                showToast("1-Click Install Ready! Tap 'Install App Now (1-Click)'.");
-            });
-
-            window.addEventListener('appinstalled', () => {
-                deferredInstallPrompt = null;
-                const mainLabel = document.getElementById('mainInstallBtnLabel');
-                if (mainLabel) mainLabel.textContent = 'App Installed ✓';
-                showToast("Nate's Fitness Tool installed to your device!");
-            });
 
             // Monitor Online / Offline network status
             window.addEventListener('online', updateNetworkStatusUI);
@@ -1171,7 +901,7 @@ self.addEventListener('fetch', event => {
                 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
                 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
                 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-                'https://unpkg.com/lucide@latest'
+                'https://unpkg.com/lucide@1.62.0'
             ];
             try {
                 const cache = await caches.open('nates-fitness-tool-v2');
@@ -1187,91 +917,6 @@ self.addEventListener('fetch', event => {
             if (!isOnline) {
                 // Automatically enable vector grid mode on map if offline
                 enableOfflineVectorMapMode(true);
-            }
-        }
-
-        // One-Click 100% Self-Contained Offline HTML Compiler
-        async function downloadSelfContainedOfflineHTML() {
-            const btn = document.getElementById('downloadStandaloneHtmlBtn');
-            const btnText = document.getElementById('standaloneBtnText');
-            const progress = document.getElementById('standaloneProgressText');
-
-            btn.disabled = true;
-            progress.classList.remove('hidden');
-            progress.textContent = 'Fetching & inlining Chart.js, Leaflet & Icons...';
-
-            try {
-                let htmlSource = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-                // Fetch external scripts and CSS so they can be embedded directly inside the HTML file
-                const resources = [
-                    {
-                        find: '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>',
-                        url: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
-                        type: 'script'
-                    },
-                    {
-                        find: '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">',
-                        url: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-                        type: 'style'
-                    },
-                    {
-                        find: '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>',
-                        url: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-                        type: 'script'
-                    },
-                    {
-                        find: '<script src="https://unpkg.com/lucide@latest"><\/script>',
-                        url: 'https://unpkg.com/lucide@latest',
-                        type: 'script'
-                    }
-                ];
-
-                // Extract already-generated Tailwind CSS styles from current DOM so even styling works 100% offline
-                let compiledStyles = '';
-                document.querySelectorAll('style').forEach(styleEl => {
-                    compiledStyles += styleEl.innerHTML + '\n';
-                });
-
-                for (const res of resources) {
-                    try {
-                        const response = await fetch(res.url);
-                        if (response.ok) {
-                            const content = await response.text();
-                            if (res.type === 'script') {
-                                htmlSource = htmlSource.replace(res.find, () => `<script>/* Inlined ${res.url} */\n${content}<\/script>`);
-                            } else if (res.type === 'style') {
-                                htmlSource = htmlSource.replace(res.find, () => `<style>/* Inlined ${res.url} */\n${content}</style>`);
-                            }
-                        }
-                    } catch (fetchErr) {
-                        console.warn('Could not inline resource:', res.url, fetchErr);
-                    }
-                }
-
-                // Inject compiled Tailwind rules into <head> so the downloaded file renders identically with zero network
-                const tailwindSnapshotStyle = `<style id="offline-tailwind-snapshot">\n${compiledStyles}\n</style>`;
-                htmlSource = htmlSource.replace('</head>', `${tailwindSnapshotStyle}\n</head>`);
-
-                const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'nates-fitness-tool-offline.html';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                progress.textContent = '✓ Downloaded nates-fitness-tool-offline.html!';
-                showToast('Downloaded 100% self-contained offline HTML app!');
-            } catch (err) {
-                console.error(err);
-                showToast('Downloaded HTML snapshot.');
-            } finally {
-                btn.disabled = false;
-                btnText.textContent = 'Download 100% Self-Contained Offline HTML';
-                setTimeout(() => progress.classList.add('hidden'), 5000);
             }
         }
 
@@ -1294,7 +939,6 @@ self.addEventListener('fetch', event => {
             comparisonMode: 'pairwise', // 'pairwise' | 'reference'
             gpsComparisonMode: 'pairwise', // 'pairwise' | 'reference'
             referenceTrackId: null, // User-marked known-good HR Reference device ID
-            hrReferenceTrackId: null, // Alias for HR Reference device ID
             gpsReferenceTrackId: null, // User-marked known-good GPS Reference device ID (independent of HR ref)
             syncStateMode: 'gps',   // 'gps' | 'bestfit' | 'manual'
             xAxisMode: 'elapsed', // 'elapsed' | 'distance' | 'timestamp'
@@ -1302,12 +946,8 @@ self.addEventListener('fetch', event => {
             showDeltaChart: false,
             compareIdA: null,
             compareIdB: null,
-            compareTrackAId: null,
-            compareTrackBId: null,
             gpsCompareIdA: null,
             gpsCompareIdB: null,
-            gpsCompareTrackAId: null,
-            gpsCompareTrackBId: null,
             map: null,
             tileLayer: null,
             polylines: [],
@@ -1483,14 +1123,11 @@ self.addEventListener('fetch', event => {
             const trk = state.tracks.find(t => t.id === trackId);
             if (!trk) return;
             state.referenceTrackId = trk.id;
-            state.hrReferenceTrackId = trk.id;
             state.compareIdA = trk.id;
-            state.compareTrackAId = trk.id;
             if (state.tracks.length > 1 && state.compareIdB === state.compareIdA) {
                 const idxA = state.tracks.findIndex(t => t.id === state.compareIdA);
                 const nextIdx = (idxA + 1) % state.tracks.length;
                 state.compareIdB = state.tracks[nextIdx].id;
-                state.compareTrackBId = state.compareIdB;
             }
             // Automatically re-sync all tracks by GPS UTC Clock against the newly selected Reference track
             autoSyncTracksByGpsClock(true);
@@ -1509,12 +1146,10 @@ self.addEventListener('fetch', event => {
             if (!trk) return;
             state.gpsReferenceTrackId = trk.id;
             state.gpsCompareIdA = trk.id;
-            state.gpsCompareTrackAId = trk.id;
             if (state.tracks.length > 1 && state.gpsCompareIdB === state.gpsCompareIdA) {
                 const idxA = state.tracks.findIndex(t => t.id === state.gpsCompareIdA);
                 const nextIdx = (idxA + 1) % state.tracks.length;
                 state.gpsCompareIdB = state.tracks[nextIdx].id;
-                state.gpsCompareTrackBId = state.gpsCompareIdB;
             }
             if (state.tracks.length > 2 && state.comparisonMode !== 'reference') {
                 setComparisonMode('reference');
@@ -1530,11 +1165,9 @@ self.addEventListener('fetch', event => {
             if (state.comparisonMode === 'reference') {
                 if (state.referenceTrackId && state.tracks.some(t => t.id === state.referenceTrackId)) {
                     state.compareIdA = state.referenceTrackId;
-                    state.compareTrackAId = state.referenceTrackId;
                 }
                 if (state.gpsReferenceTrackId && state.tracks.some(t => t.id === state.gpsReferenceTrackId)) {
                     state.gpsCompareIdA = state.gpsReferenceTrackId;
-                    state.gpsCompareTrackAId = state.gpsReferenceTrackId;
                 }
             }
 
@@ -1591,6 +1224,11 @@ self.addEventListener('fetch', event => {
         /********************************************************************
          * UTILITY FUNCTIONS (Math, Geodesy, Formatting)
          ********************************************************************/
+        // Escape text from loaded files (device / file names) before inserting it into HTML
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
         function showToast(msg) {
             const banner = document.getElementById('toastBanner');
             const text = document.getElementById('toastMessage');
@@ -2273,7 +1911,7 @@ self.addEventListener('fetch', event => {
                             <input type="color" value="${trk.color}" data-id="${trk.id}" class="color-picker w-6 h-6 rounded-lg cursor-pointer border-0 bg-transparent shrink-0" title="Change Track Color" />
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <input type="text" value="${trk.name}" data-id="${trk.id}" class="track-name-input font-semibold text-xs sm:text-sm bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-indigo-500 focus:outline-none truncate max-w-[180px] sm:max-w-xs" title="Click to rename device" />
+                                    <input type="text" value="${escapeHtml(trk.name)}" data-id="${trk.id}" class="track-name-input font-semibold text-xs sm:text-sm bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-indigo-500 focus:outline-none truncate max-w-[180px] sm:max-w-xs" title="Click to rename device" />
                                     <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300 shrink-0">
                                         ${trk.stats.avgHR ? trk.stats.avgHR + ' bpm avg' : 'No HR'}
                                     </span>
@@ -2434,21 +2072,15 @@ self.addEventListener('fetch', event => {
             if (state.tracks.length === 0) {
                 state.compareIdA = null;
                 state.compareIdB = null;
-                state.compareTrackAId = null;
-                state.compareTrackBId = null;
                 state.gpsCompareIdA = null;
                 state.gpsCompareIdB = null;
-                state.gpsCompareTrackAId = null;
-                state.gpsCompareTrackBId = null;
                 state.referenceTrackId = null;
-                state.hrReferenceTrackId = null;
                 state.gpsReferenceTrackId = null;
                 return;
             }
             if (!state.tracks.some(t => t.id === state.referenceTrackId)) {
                 state.referenceTrackId = state.tracks[0].id;
             }
-            state.hrReferenceTrackId = state.referenceTrackId;
             if (!state.tracks.some(t => t.id === state.gpsReferenceTrackId)) {
                 state.gpsReferenceTrackId = state.tracks[0].id;
             }
@@ -2477,10 +2109,6 @@ self.addEventListener('fetch', event => {
                     state.gpsCompareIdB = state.tracks[nextGpsIdx].id;
                 }
             }
-            state.compareTrackAId = state.compareIdA;
-            state.compareTrackBId = state.compareIdB;
-            state.gpsCompareTrackAId = state.gpsCompareIdA;
-            state.gpsCompareTrackBId = state.gpsCompareIdB;
         }
 
         function renderCompareSelectors() {
@@ -2498,7 +2126,7 @@ self.addEventListener('fetch', event => {
                 return;
             }
 
-            const optionsHtml = state.tracks.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            const optionsHtml = state.tracks.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
             selA.innerHTML = optionsHtml;
             selB.innerHTML = optionsHtml;
             selA.value = state.compareIdA;
@@ -2608,7 +2236,7 @@ self.addEventListener('fetch', event => {
                         <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                             <td class="py-2.5 px-3 font-sans font-semibold flex items-center gap-2">
                                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${challenger.color}"></span>
-                                <span class="truncate max-w-[200px]">${challenger.name}</span>
+                                <span class="truncate max-w-[200px]">${escapeHtml(challenger.name)}</span>
                             </td>
                             <td class="py-2.5 px-3 font-bold ${scoreCls}">${sim.matchScore}%</td>
                             <td class="py-2.5 px-3">${sim.correlation.toFixed(3)}</td>
@@ -2669,7 +2297,7 @@ self.addEventListener('fetch', event => {
                         <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                             <td class="py-2 px-2.5 font-sans font-semibold flex items-center gap-1.5">
                                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${challenger.color}"></span>
-                                <span class="truncate max-w-[130px]">${challenger.name}</span>
+                                <span class="truncate max-w-[130px]">${escapeHtml(challenger.name)}</span>
                             </td>
                             <td class="py-2 px-2 font-bold ${gCls}">${sim.gpsMatchScore}%</td>
                             <td class="py-2 px-2 text-sky-400">±${sim.meanGpsOffset}m <span class="text-slate-400">/ ±${sim.medianGpsOffset}m</span></td>
@@ -3226,7 +2854,7 @@ self.addEventListener('fetch', event => {
                         color: trk.color,
                         weight: 4,
                         opacity: 0.9
-                    }).bindPopup(`<strong>${trk.name}</strong><br>${(trk.stats.distanceMeters / 1000).toFixed(2)} km • ${trk.stats.dropoutCount} GPS dropouts`);
+                    }).bindPopup(`<strong>${escapeHtml(trk.name)}</strong><br>${(trk.stats.distanceMeters / 1000).toFixed(2)} km • ${trk.stats.dropoutCount} GPS dropouts`);
 
                     poly.addTo(state.map);
                     state.polylines.push(poly);
@@ -3250,7 +2878,7 @@ self.addEventListener('fetch', event => {
                                 fillColor: '#ef4444',
                                 fillOpacity: 1
                             }).bindPopup(
-                                `<strong>GPS Dropout #${dr.index} (${trk.name})</strong><br>` +
+                                `<strong>GPS Dropout #${dr.index} (${escapeHtml(trk.name)})</strong><br>` +
                                 `${dr.reason}<br>Duration: ${dr.durationSec}s at ${formatDuration(dr.startElapsedSec)}`
                             ).addTo(state.map);
                             state.polylines.push(marker);
@@ -3275,7 +2903,7 @@ self.addEventListener('fetch', event => {
                 <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                     <td class="py-3 px-3 font-sans font-medium flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full shrink-0" style="background:${trk.color}"></span>
-                        <span class="truncate max-w-xs">${trk.name}</span>
+                        <span class="truncate max-w-xs">${escapeHtml(trk.name)}</span>
                     </td>
                     <td class="py-3 px-3">${formatDuration(trk.stats.durationSec)}</td>
                     <td class="py-3 px-3">${(trk.stats.distanceMeters / 1000).toFixed(2)} km</td>
@@ -3363,9 +2991,9 @@ self.addEventListener('fetch', event => {
             const visibleTracks = state.tracks.filter(t => t.visible);
             const activeTracks = visibleTracks.length > 0 ? visibleTracks : state.tracks;
             const totalPlottedPoints = activeTracks.reduce((acc, t) => acc + t.stats.pointCount, 0);
-            const hrRefId = state.hrReferenceTrackId || state.referenceTrackId || state.compareTrackAId || state.compareIdA;
+            const hrRefId = state.referenceTrackId || state.compareIdA;
             const trkA = state.tracks.find(t => t.id === (isRefMode ? hrRefId : (state.compareIdA || hrRefId))) || activeTracks[0];
-            const trkB = state.tracks.find(t => t.id === (state.compareIdB || state.compareTrackBId)) || activeTracks[1] || activeTracks[0];
+            const trkB = state.tracks.find(t => t.id === state.compareIdB) || activeTracks[1] || activeTracks[0];
             const refComparisons = isRefMode ? computeMasterReferenceComparisons(trkA, activeTracks) : [];
 
             // 2. Top Header Banner
@@ -3881,8 +3509,6 @@ self.addEventListener('fetch', event => {
                 ctx.fillText('Load at least two overlapping Heart Rate tracks to compute pairwise statistical correlation and MAE.', 92, footerTop + 115);
             }
         }
-        // Alias so both renderHrExportReportCanvas and renderExportReportCanvas work seamlessly
-        const renderExportReportCanvas = renderHrExportReportCanvas;
 
         // Universal helper to trigger a reliable PNG download from any canvas (using toBlob with toDataURL fallback)
         function triggerCanvasPngDownload(canvas, fileName, onCompleteToast) {
@@ -4134,9 +3760,9 @@ self.addEventListener('fetch', event => {
 
             const visibleTracks = state.tracks.filter(t => t.visible);
             const activeTracks = visibleTracks.length > 0 ? visibleTracks : state.tracks;
-            const gpsRefId = state.gpsReferenceTrackId || state.gpsCompareTrackAId || state.gpsCompareIdA || state.compareIdA;
+            const gpsRefId = state.gpsReferenceTrackId || state.gpsCompareIdA || state.compareIdA;
             const trkA = state.tracks.find(t => t.id === (isRefMode ? gpsRefId : (state.gpsCompareIdA || gpsRefId))) || activeTracks[0];
-            const trkB = state.tracks.find(t => t.id === (state.gpsCompareIdB || state.gpsCompareTrackBId || state.compareIdB)) || activeTracks[1] || activeTracks[0];
+            const trkB = state.tracks.find(t => t.id === (state.gpsCompareIdB || state.compareIdB)) || activeTracks[1] || activeTracks[0];
             const sim = computePairwiseGpsStats(trkA, trkB);
             const refComparisons = isRefMode ? computeMasterReferenceComparisons(trkA, activeTracks) : [];
 
@@ -4277,7 +3903,6 @@ self.addEventListener('fetch', event => {
                         hotspotConfigs.push({ hs: null, bx, by, subBoxW, subBoxH });
                     }
                 }
-                    const hasCasing = (bgType === 'osm' || bgType === 'osm_classic' || bgType === 'satellite');
                 if (bgType === 'osm' || bgType === 'osm_classic' || bgType === 'satellite') {
                     if (statusEl) statusEl.classList.remove('hidden');
                     const scaledTileSize = 256 * fitZoomMultiplier;
@@ -5342,12 +4967,6 @@ self.addEventListener('fetch', event => {
         /********************************************************************
          * FILE UPLOAD HANDLER & INITIALIZATION
          ********************************************************************/
-        const parseFitnessXML = parseActivityXML;
-        const refreshAll = updateAllVisuals;
-        const renderTrackCards = renderFileList;
-        const renderGlobalStats = renderSummaryTable;
-        const renderMap = renderMapTracks;
-
         // Reliable cross-browser File-to-Text reader (uses FileReader with file.text() support)
         function readFileAsText(file) {
             return new Promise((resolve, reject) => {
@@ -5534,14 +5153,11 @@ self.addEventListener('fetch', event => {
             if (compareSelectA) {
                 compareSelectA.addEventListener('change', e => {
                     state.compareIdA = e.target.value;
-                    state.compareTrackAId = e.target.value;
                     state.referenceTrackId = e.target.value;
-                    state.hrReferenceTrackId = e.target.value;
                     if (state.tracks.length > 1 && state.compareIdB === state.compareIdA) {
                         const idxA = state.tracks.findIndex(t => t.id === state.compareIdA);
                         const nextIdx = (idxA + 1) % state.tracks.length;
                         state.compareIdB = state.tracks[nextIdx].id;
-                        state.compareTrackBId = state.compareIdB;
                     }
                     updateAllVisuals();
                 });
@@ -5549,7 +5165,6 @@ self.addEventListener('fetch', event => {
             if (compareSelectB) {
                 compareSelectB.addEventListener('change', e => {
                     state.compareIdB = e.target.value;
-                    state.compareTrackBId = e.target.value;
                     updateAllVisuals();
                 });
             }
@@ -5560,13 +5175,11 @@ self.addEventListener('fetch', event => {
             if (gpsCompareSelectA) {
                 gpsCompareSelectA.addEventListener('change', e => {
                     state.gpsCompareIdA = e.target.value;
-                    state.gpsCompareTrackAId = e.target.value;
                     state.gpsReferenceTrackId = e.target.value;
                     if (state.tracks.length > 1 && state.gpsCompareIdB === state.gpsCompareIdA) {
                         const idxA = state.tracks.findIndex(t => t.id === state.gpsCompareIdA);
                         const nextIdx = (idxA + 1) % state.tracks.length;
                         state.gpsCompareIdB = state.tracks[nextIdx].id;
-                        state.gpsCompareTrackBId = state.gpsCompareIdB;
                     }
                     updateAllVisuals();
                 });
@@ -5574,7 +5187,6 @@ self.addEventListener('fetch', event => {
             if (gpsCompareSelectB) {
                 gpsCompareSelectB.addEventListener('change', e => {
                     state.gpsCompareIdB = e.target.value;
-                    state.gpsCompareTrackBId = e.target.value;
                     updateAllVisuals();
                 });
             }
