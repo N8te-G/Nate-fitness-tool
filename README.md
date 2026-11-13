@@ -27,6 +27,7 @@ live app is `index.html`.
 The app is plain HTML with its libraries stored in `vendor/` (no outside CDNs), so it works in
 browsers that block third-party scripts (e.g. Brave Shields) and fully offline once installed.
 
+Icons are built into `index.html` (only the ~30 Lucide icons the app uses; add new ones to the `ICONS` list there).
 Styling uses a prebuilt Tailwind stylesheet (`vendor/tailwind.css`). After adding or changing
 Tailwind classes in `index.html`, rebuild it:
 
