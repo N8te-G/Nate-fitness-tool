@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=c9af12d37c">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=657a188ee2">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -440,7 +440,7 @@
                         <h2 class="text-base font-bold">Heart Rate Comparison (BPM)</h2>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Hover anywhere on the graph to inspect exact BPM values and instant sensor delta.
+                        Touch or hover on the graph to see each device's exact BPM at that moment.
                     </p>
                 </div>
 
@@ -483,9 +483,32 @@
                 </div>
             </div>
 
+            <!-- Readout for the touched/hovered moment (replaces the floating tooltip box) -->
+            <div id="hrReadout" class="h-14 overflow-hidden flex flex-wrap items-center content-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/70 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
+                Touch the graph to see readings
+            </div>
+
             <!-- Main HR Canvas Wrapper -->
             <div class="relative h-80 sm:h-96 w-full">
                 <canvas id="hrChartCanvas"></canvas>
+            </div>
+
+            <!-- Zoom: overview strip with a draggable window, plus quick span buttons -->
+            <div id="hrNavigator" class="hidden space-y-1.5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div id="hrZoomPresets" class="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs font-semibold"></div>
+                    <span id="hrWindowLabel" class="text-[11px] font-mono text-slate-500 dark:text-slate-400"></span>
+                </div>
+                <div id="hrNavTrack" class="relative h-14 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800/70 select-none cursor-pointer" style="touch-action: none;">
+                    <canvas id="hrNavCanvas" class="absolute inset-0 w-full h-full"></canvas>
+                    <div id="hrNavShadeL" class="absolute inset-y-0 left-0 bg-slate-500/25 dark:bg-black/45 pointer-events-none"></div>
+                    <div id="hrNavShadeR" class="absolute inset-y-0 right-0 bg-slate-500/25 dark:bg-black/45 pointer-events-none"></div>
+                    <div id="hrNavWindow" class="absolute inset-y-0 rounded-md border-2 border-rose-500 bg-rose-500/5 cursor-grab">
+                        <div data-handle="l" class="absolute inset-y-0 left-0 w-7 -ml-1 flex items-center justify-center cursor-ew-resize"><span class="w-1.5 h-7 rounded-full bg-rose-500 shadow"></span></div>
+                        <div data-handle="r" class="absolute inset-y-0 right-0 w-7 -mr-1 flex items-center justify-center cursor-ew-resize"><span class="w-1.5 h-7 rounded-full bg-rose-500 shadow"></span></div>
+                    </div>
+                </div>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">Drag the window to move through the workout · drag its edges to zoom · tap the strip to jump</p>
             </div>
 
             <!-- Optional Delta Error Sub-Chart Wrapper -->
@@ -2460,6 +2483,190 @@
             }
         }
 
+        // ===== Heart-rate chart zoom: overview strip with a draggable window =====
+        const HR_NAV = { full: null, win: null, key: null, datasets: null, raf: 0, pending: undefined };
+
+        function hrNavFormatX(v) {
+            if (state.xAxisMode === 'elapsed') return formatDuration(v);
+            if (state.xAxisMode === 'distance') return `${Number(v).toFixed(2)} km`;
+            return new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        function hrNavMinSpan() {
+            return state.xAxisMode === 'distance' ? 0.1 : state.xAxisMode === 'elapsed' ? 30 : 30000;
+        }
+        function hrNavPresets() {
+            if (state.xAxisMode === 'distance') return [['Full', null], ['2 km', 2], ['1 km', 1], ['0.5 km', 0.5]];
+            const k = state.xAxisMode === 'elapsed' ? 1 : 1000;
+            return [['Full', null], ['10 min', 600 * k], ['5 min', 300 * k], ['1 min', 60 * k]];
+        }
+
+        function setupHrNavigator(datasets) {
+            const nav = document.getElementById('hrNavigator');
+            if (!nav) return;
+            let xMin = Infinity, xMax = -Infinity;
+            datasets.forEach(d => d.data.forEach(p => { if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x; }));
+            if (!Number.isFinite(xMin) || xMax <= xMin) { nav.classList.add('hidden'); HR_NAV.full = null; return; }
+            nav.classList.remove('hidden');
+            HR_NAV.datasets = datasets;
+            HR_NAV.full = { min: xMin, max: xMax };
+            const key = state.xAxisMode + '|' + state.tracks.map(t => t.id).join(',');
+            if (HR_NAV.key !== key) { HR_NAV.win = null; HR_NAV.key = key; }
+
+            const presets = document.getElementById('hrZoomPresets');
+            presets.innerHTML = hrNavPresets().map(([label, span]) =>
+                `<button type="button" data-span="${span ?? ''}" class="hr-zoom-preset px-2.5 py-1 rounded-md cursor-pointer">${label}</button>`).join('');
+            drawHrNavCanvas();
+            applyHrWindow(HR_NAV.win);
+        }
+
+        function drawHrNavCanvas() {
+            const canvas = document.getElementById('hrNavCanvas');
+            if (!canvas || !HR_NAV.full || !HR_NAV.datasets) return;
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.clientWidth, h = canvas.clientHeight;
+            if (!w || !h) return;
+            canvas.width = Math.round(w * dpr);
+            canvas.height = Math.round(h * dpr);
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, w, h);
+            let yMin = Infinity, yMax = -Infinity;
+            HR_NAV.datasets.forEach(d => d.data.forEach(p => { if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y; }));
+            const span = HR_NAV.full.max - HR_NAV.full.min, ySpan = Math.max(1, yMax - yMin);
+            HR_NAV.datasets.forEach(d => {
+                const step = Math.max(1, Math.floor(d.data.length / (w * 1.5)));
+                ctx.beginPath();
+                for (let i = 0; i < d.data.length; i += step) {
+                    const p = d.data[i];
+                    const x = ((p.x - HR_NAV.full.min) / span) * w;
+                    const y = h - 6 - ((p.y - yMin) / ySpan) * (h - 12);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = d.borderColor;
+                ctx.lineWidth = 1.4;
+                ctx.globalAlpha = 0.9;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            });
+        }
+
+        // Clamp a window to the data range and minimum span; null means the whole workout
+        function clampHrWindow(win) {
+            const full = HR_NAV.full;
+            if (!full || !win) return null;
+            const fullSpan = full.max - full.min;
+            let span = Math.max(hrNavMinSpan(), win.max - win.min);
+            if (span >= fullSpan * 0.999) return null;
+            let min = win.min, max = min + span;
+            if (min < full.min) { min = full.min; max = min + span; }
+            if (max > full.max) { max = full.max; min = max - span; }
+            return { min, max };
+        }
+
+        function applyHrWindow(win) {
+            HR_NAV.win = clampHrWindow(win);
+            const full = HR_NAV.full;
+            if (!full) return;
+            const w = HR_NAV.win;
+            const chart = state.hrChart;
+            if (chart) {
+                chart.options.scales.x.min = w ? w.min : undefined;
+                chart.options.scales.x.max = w ? w.max : undefined;
+                // Fit the heart-rate scale to the visible section so detail fills the chart
+                if (w) {
+                    let yMin = Infinity, yMax = -Infinity;
+                    (HR_NAV.datasets || []).forEach(d => d.data.forEach(p => {
+                        if (p.x >= w.min && p.x <= w.max) { if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y; }
+                    }));
+                    chart.options.scales.y.min = Number.isFinite(yMin) ? Math.floor((yMin - 3) / 5) * 5 : undefined;
+                    chart.options.scales.y.max = Number.isFinite(yMax) ? Math.ceil((yMax + 3) / 5) * 5 : undefined;
+                } else {
+                    chart.options.scales.y.min = undefined;
+                    chart.options.scales.y.max = undefined;
+                }
+                chart.update('none');
+            }
+            const dc = state.deltaChart;
+            if (dc && dc.options?.scales?.x) {
+                dc.options.scales.x.min = w ? w.min : undefined;
+                dc.options.scales.x.max = w ? w.max : undefined;
+                dc.update('none');
+            }
+            // Overlay positions
+            const span = full.max - full.min;
+            const a = w ? (w.min - full.min) / span * 100 : 0;
+            const b = w ? (w.max - full.min) / span * 100 : 100;
+            document.getElementById('hrNavWindow').style.cssText = `left:${a}%;width:${b - a}%;`;
+            document.getElementById('hrNavShadeL').style.width = `${a}%`;
+            document.getElementById('hrNavShadeR').style.width = `${100 - b}%`;
+            const label = document.getElementById('hrWindowLabel');
+            label.textContent = w ? `${hrNavFormatX(w.min)} – ${hrNavFormatX(w.max)}` : 'Whole workout';
+            document.querySelectorAll('.hr-zoom-preset').forEach(btn => {
+                const s = btn.dataset.span === '' ? null : Number(btn.dataset.span);
+                const on = s === null ? !w : (w && Math.abs((w.max - w.min) - s) < s * 0.02);
+                btn.className = `hr-zoom-preset px-2.5 py-1 rounded-md cursor-pointer ${on ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`;
+            });
+        }
+
+        // Smooth dragging: apply at most once per animation frame
+        function scheduleHrWindow(win) {
+            HR_NAV.pending = win;
+            if (HR_NAV.raf) return;
+            HR_NAV.raf = requestAnimationFrame(() => {
+                HR_NAV.raf = 0;
+                applyHrWindow(HR_NAV.pending);
+            });
+        }
+
+        function initHrNavigator() {
+            const track = document.getElementById('hrNavTrack');
+            const presets = document.getElementById('hrZoomPresets');
+            if (!track || !presets) return;
+            presets.addEventListener('click', e => {
+                const btn = e.target.closest('.hr-zoom-preset');
+                if (!btn || !HR_NAV.full) return;
+                if (btn.dataset.span === '') { applyHrWindow(null); return; }
+                const span = Number(btn.dataset.span);
+                const cur = HR_NAV.win || HR_NAV.full;
+                const c = (cur.min + cur.max) / 2;
+                applyHrWindow({ min: c - span / 2, max: c + span / 2 });
+            });
+            let drag = null;
+            track.addEventListener('pointerdown', e => {
+                if (!HR_NAV.full) return;
+                const rect = track.getBoundingClientRect();
+                const span = HR_NAV.full.max - HR_NAV.full.min;
+                const cur = HR_NAV.win || { ...HR_NAV.full };
+                const handle = e.target.closest('[data-handle]');
+                let mode = handle ? handle.dataset.handle : (e.target.closest('#hrNavWindow') ? 'move' : 'jump');
+                let start = { ...cur };
+                if (mode === 'jump') {
+                    // Tap outside the window: centre the window there, then allow dragging
+                    const x = HR_NAV.full.min + ((e.clientX - rect.left) / rect.width) * span;
+                    const w = cur.max - cur.min;
+                    applyHrWindow({ min: x - w / 2, max: x + w / 2 });
+                    start = { ...(HR_NAV.win || HR_NAV.full) };
+                    mode = 'move';
+                }
+                drag = { mode, startX: e.clientX, start, rect, span };
+                track.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+            track.addEventListener('pointermove', e => {
+                if (!drag) return;
+                const dx = ((e.clientX - drag.startX) / drag.rect.width) * drag.span;
+                const s = drag.start, minSpan = hrNavMinSpan();
+                if (drag.mode === 'move') scheduleHrWindow({ min: s.min + dx, max: s.max + dx });
+                // Edges stop at the start/end of the workout (the other edge never moves)
+                else if (drag.mode === 'l') scheduleHrWindow({ min: Math.max(HR_NAV.full.min, Math.min(s.min + dx, s.max - minSpan)), max: s.max });
+                else if (drag.mode === 'r') scheduleHrWindow({ min: s.min, max: Math.min(HR_NAV.full.max, Math.max(s.max + dx, s.min + minSpan)) });
+            });
+            const end = e => { if (drag) { drag = null; try { track.releasePointerCapture(e.pointerId); } catch (_) {} } };
+            track.addEventListener('pointerup', end);
+            track.addEventListener('pointercancel', end);
+            if ('ResizeObserver' in window) new ResizeObserver(() => drawHrNavCanvas()).observe(track);
+        }
+
         function renderCharts() {
             // If the chart library failed to load (e.g. blocked), skip charts so the rest of the page still updates
             if (typeof Chart === 'undefined') return;
@@ -2511,14 +2718,57 @@
                 return new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             };
 
+            // Readings for the touched/hovered moment, shown in a bar above the chart instead of a floating box
+            const renderHrReadout = ({ tooltip }) => {
+                const el = document.getElementById('hrReadout');
+                if (!el) return;
+                if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
+                    el.textContent = 'Touch the graph to see readings';
+                    return;
+                }
+                const pts = tooltip.dataPoints;
+                const parts = [`<span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${formatXTick(pts[0].parsed.x)}</span>`];
+                pts.forEach(dp => {
+                    const shortName = escapeHtml(String(dp.dataset.label).split(' (')[0]);
+                    parts.push(`<span class="inline-flex items-center gap-1.5 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${dp.dataset.borderColor}"></span><span class="truncate max-w-[9rem]">${shortName}</span><span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${Math.round(dp.parsed.y * 10) / 10}</span></span>`);
+                });
+                if (pts.length === 2) {
+                    parts.push(`<span class="font-mono">Δ ${Math.abs(pts[0].parsed.y - pts[1].parsed.y).toFixed(1)} BPM</span>`);
+                }
+                el.innerHTML = parts.join('');
+            };
+            // Thin vertical line marking the touched/hovered moment
+            const hrCrosshairPlugin = {
+                id: 'hrCrosshair',
+                afterDatasetsDraw(chart) {
+                    const active = chart.tooltip && chart.tooltip.getActiveElements ? chart.tooltip.getActiveElements() : [];
+                    if (!active.length) return;
+                    const x = active[0].element.x;
+                    const { top, bottom } = chart.chartArea;
+                    const c = chart.ctx;
+                    c.save();
+                    c.beginPath();
+                    c.moveTo(x, top);
+                    c.lineTo(x, bottom);
+                    c.lineWidth = 1.5;
+                    c.strokeStyle = isDark ? 'rgba(226, 232, 240, 0.55)' : 'rgba(15, 23, 42, 0.45)';
+                    c.setLineDash([4, 4]);
+                    c.stroke();
+                    c.restore();
+                }
+            };
+
             // 1. Primary Heart Rate Chart
             const hrCtx = document.getElementById('hrChartCanvas').getContext('2d');
             if (state.hrChart) state.hrChart.destroy();
 
             state.hrChart = new Chart(hrCtx, {
                 type: 'line',
+                plugins: [hrCrosshairPlugin],
                 data: { datasets: hrDatasets },
                 options: {
+                    // No 'mouseout': browsers fire it right after a touch tap; a real mouse leaving is handled below
+                    events: ['mousemove', 'click', 'touchstart', 'touchmove'],
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: {
@@ -2536,28 +2786,7 @@
                                 font: { family: 'Inter', size: 12, weight: '600' }
                             }
                         },
-                        tooltip: {
-                            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                            titleColor: isDark ? '#f8fafc' : '#0f172a',
-                            bodyColor: isDark ? '#e2e8f0' : '#334155',
-                            borderColor: isDark ? '#334155' : '#e2e8f0',
-                            borderWidth: 1,
-                            padding: 12,
-                            callbacks: {
-                                title: items => {
-                                    if (!items.length) return '';
-                                    return `${xAxisTitle}: ${formatXTick(items[0].parsed.x)}`;
-                                },
-                                label: item => ` ${item.dataset.label}: ${item.parsed.y} BPM`,
-                                afterBody: items => {
-                                    if (items.length >= 2) {
-                                        const diff = Math.abs(items[0].parsed.y - items[1].parsed.y).toFixed(1);
-                                        return `\n Instant Spread: Δ ${diff} BPM`;
-                                    }
-                                    return '';
-                                }
-                            }
-                        }
+                        tooltip: { enabled: false, external: renderHrReadout }
                     },
                     scales: {
                         x: {
@@ -2574,6 +2803,14 @@
                     }
                 }
             });
+
+            hrCtx.canvas.onpointerleave = e => {
+                if (e.pointerType !== 'mouse' || !state.hrChart) return;
+                state.hrChart.setActiveElements([]);
+                state.hrChart.tooltip.setActiveElements([], { x: 0, y: 0 });
+                state.hrChart.update('none');
+                renderHrReadout({ tooltip: null });
+            };
 
             // 2. Delta Sub-Chart (Pairwise Track B - Track A, OR Multi-Track Challengers - Master Reference)
             const deltaCtx = document.getElementById('deltaChartCanvas').getContext('2d');
@@ -2655,6 +2892,8 @@
 
             // 3. Elevation Profile Chart
             const elevCtx = document.getElementById('elevationChartCanvas').getContext('2d');
+            setupHrNavigator(hrDatasets);
+
             if (state.elevChart) state.elevChart.destroy();
 
             const elevDatasets = visibleTracks.map(trk => {
@@ -5530,6 +5769,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             initThemeToggle();
             initRememberedExportSettings();
+            initHrNavigator();
             initInstallHint();
             if (typeof lucide !== 'undefined') lucide.createIcons();
             initPWAAndOfflineEngine();
