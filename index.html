@@ -153,15 +153,16 @@
                         <radialGradient id="hdrLogoHl" cx="0.22" cy="0.12" r="0.75">
                             <stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
                         </radialGradient>
-                        <clipPath id="hdrLogoL"><polygon points="0,0 300,0 190,512 0,512"/></clipPath>
-                        <clipPath id="hdrLogoR"><polygon points="300,0 512,0 512,512 190,512"/></clipPath>
-                        <path id="hdrLogoHeart" fill="none" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/>
+                        <mask id="hdrLogoGap" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+                            <rect width="512" height="512" fill="#fff"/>
+                            <path transform="translate(92.8 92.5) scale(12.6)" d="M12.0 5.86 A0.6 0.6 0 0 1 11.591 5.825A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362" fill="none" stroke="#000" stroke-width="3.9" stroke-linecap="round" stroke-linejoin="round"/>
+                        </mask>
                     </defs>
                     <rect width="512" height="512" fill="url(#hdrLogoBg)"/>
                     <rect width="512" height="512" fill="url(#hdrLogoHl)"/>
-                    <use href="#hdrLogoHeart" transform="translate(118.8 124.5) scale(12.6)" stroke="#FFFFFF" stroke-opacity="0.4"/>
-                    <g clip-path="url(#hdrLogoR)"><use href="#hdrLogoHeart" transform="translate(92.8 92.5) scale(12.6)" stroke="#1E1B4B"/></g>
-                    <g clip-path="url(#hdrLogoL)"><use href="#hdrLogoHeart" transform="translate(92.8 92.5) scale(12.6)" stroke="#FFFFFF"/></g>
+                    <path transform="translate(118.8 124.5) scale(12.6)" d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762" fill="none" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+                    <g mask="url(#hdrLogoGap)"><path transform="translate(92.8 92.5) scale(12.6)" d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676M10.535 20.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762" fill="none" stroke="#1E1B4B" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/></g>
+                    <path transform="translate(92.8 92.5) scale(12.6)" d="M12.0 5.86 A0.6 0.6 0 0 1 11.591 5.825A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362" fill="none" stroke="#FFFFFF" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 <div class="min-w-0">
                     <h1 class="font-bold text-base sm:text-lg tracking-tight leading-none flex items-center gap-2 truncate">
@@ -914,32 +915,42 @@
             ctx.fillStyle = hl;
             ctx.fillRect(0, 0, 512, 512);
 
-            // Two-tone heart handshake (Lucide heart-handshake, ISC), split diagonally white / midnight,
-            // with an offset translucent "ghost" heart behind it for the second device's reading
-            const heart = new Path2D('M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762');
-            const strokeHeart = (tx, ty, color, clipPoints) => {
-                ctx.save();
-                if (clipPoints) {
-                    ctx.beginPath();
-                    clipPoints.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
-                    ctx.closePath();
-                    ctx.clip();
-                }
-                ctx.translate(tx, ty);
-                ctx.scale(12.6, 12.6);
-                ctx.lineWidth = 2.4;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = color;
-                ctx.stroke(heart);
-                ctx.restore();
+            // Heart handshake (Lucide heart-handshake, ISC): left hand white, right hand midnight, woven where the
+            // right thumb passes under the left hand, plus an offset translucent "ghost" heart for the second device
+            const strokeHeartPath = (c, d, color, width, tx, ty) => {
+                c.save();
+                c.translate(tx, ty);
+                c.scale(12.6, 12.6);
+                c.lineWidth = width;
+                c.lineCap = 'round';
+                c.lineJoin = 'round';
+                c.strokeStyle = color;
+                c.stroke(new Path2D(d));
+                c.restore();
             };
-            strokeHeart(118.8, 124.5, 'rgba(255, 255, 255, 0.38)');
+            const HEART_FULL = 'M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762';
+            const HEART_LEFT = 'M12.0 5.86 A0.6 0.6 0 0 1 11.591 5.825A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362';
+            const HEART_RIGHT = 'M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676M10.535 20.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762';
+            strokeHeartPath(ctx, HEART_FULL, 'rgba(255, 255, 255, 0.38)', 2.4, 118.8, 124.5);
+
+            // Draw both hands on a separate layer (so the weave gap can be cut out), then place it with a shadow
+            const m = ctx.getTransform();
+            const layerPx = Math.max(16, Math.ceil(512 * Math.hypot(m.a, m.b)));
+            const layer = document.createElement('canvas');
+            layer.width = layerPx;
+            layer.height = layerPx;
+            const lc = layer.getContext('2d');
+            lc.scale(layerPx / 512, layerPx / 512);
+            strokeHeartPath(lc, HEART_RIGHT, '#1E1B4B', 2.4, 92.8, 92.5);
+            lc.globalCompositeOperation = 'destination-out';
+            strokeHeartPath(lc, HEART_LEFT, '#000', 3.5, 92.8, 92.5);
+            lc.globalCompositeOperation = 'source-over';
+            strokeHeartPath(lc, HEART_LEFT, '#FFFFFF', 2.4, 92.8, 92.5);
+
             ctx.shadowColor = 'rgba(59, 7, 100, 0.3)';
             ctx.shadowBlur = 18 * size / 512;
             ctx.shadowOffsetY = 8 * size / 512;
-            strokeHeart(92.8, 92.5, '#1E1B4B', [[300, 0], [512, 0], [512, 512], [190, 512]]);
-            strokeHeart(92.8, 92.5, '#FFFFFF', [[0, 0], [300, 0], [190, 512], [0, 512]]);
+            ctx.drawImage(layer, 0, 0, 512, 512);
             ctx.shadowColor = 'transparent';
             ctx.restore();
         }

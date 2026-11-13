@@ -2,7 +2,7 @@
 // - The app page is network-first, so updates show up as soon as you're online.
 // - Libraries (stored in ./vendor) and web fonts are served from cache and refreshed in the background.
 // - Map tiles and anything else are left to the network.
-const CACHE = 'nft-v6';
+const CACHE = 'nft-v7';
 
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './icon.svg',
     './vendor/tailwind.css', './vendor/chart.umd.min.js',
