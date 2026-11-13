@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=55b3ab5ad6">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=c9af12d37c">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -275,7 +275,7 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-xs font-bold text-slate-800 dark:text-slate-100">Time Sync &amp; Alignment</span>
                                 <span id="syncStatusPill" class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">
-                                    Auto-Sync Ready (GPS UTC Clock)
+                                    Auto-Sync Ready (Clock)
                                 </span>
                             </div>
                             <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
@@ -284,12 +284,12 @@
                         </div>
                     </div>
 
-                    <!-- GPS clock sync, with its explanation -->
+                    <!-- Clock sync (recording timestamps), with its explanation -->
                     <div class="flex flex-col gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/50 border border-rose-500/30">
-                        <button type="button" id="globalGpsSyncBtn" class="w-full flex flex-col items-center justify-center gap-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF9A5B] via-[#F43F5E] to-[#7C3AED] hover:brightness-110 text-white shadow-md shadow-rose-500/25 transition-all cursor-pointer" title="Align all tracks to the Reference device's exact GPS UTC start time">
-                        <span class="inline-flex items-center gap-2 text-sm font-semibold"><i data-lucide="clock" class="w-4 h-4"></i>Sync by GPS Clock</span>
+                        <button type="button" id="globalGpsSyncBtn" class="w-full flex flex-col items-center justify-center gap-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF9A5B] via-[#F43F5E] to-[#7C3AED] hover:brightness-110 text-white shadow-md shadow-rose-500/25 transition-all cursor-pointer" title="Line all tracks up with the Reference device using each recording's timestamps">
+                        <span class="inline-flex items-center gap-2 text-sm font-semibold"><i data-lucide="clock" class="w-4 h-4"></i>Sync by Clock</span>
                     </button>
-                        <p class="text-[11px] text-slate-600 dark:text-slate-300 px-0.5">Lines tracks up by satellite (GPS UTC) time. This keeps each device's real timing, so it's the most accurate way to compare devices.</p>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-300 px-0.5">Lines tracks up by the time each device recorded: satellite time on GPS watches, your phone's time on straps like the Polar H10. This keeps each device's real timing, so it's the most accurate way to compare devices.</p>
                     </div>
 
                     <button type="button" id="globalResetSyncBtn" class="self-start inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 underline-offset-2 hover:underline cursor-pointer" title="Reset all track offsets back to 0s relative elapsed time">
@@ -1088,7 +1088,7 @@
             return `${hh}:${mm}:${ss} UTC`;
         }
 
-        // Calculate the exact GPS UTC Clock offset (in seconds) needed to align `track` to `refTrack`
+        // Clock offset (in seconds) that aligns `track` to `refTrack`, from their recording start timestamps
         function computeGpsClockOffsetSec(refTrack, track) {
             if (!refTrack || !track || refTrack.id === track.id) return 0;
             if (!Number.isFinite(refTrack.startTimeMs) || !Number.isFinite(track.startTimeMs)) return 0;
@@ -1106,13 +1106,13 @@
             if (!pill) return;
 
             if (state.tracks.length < 2) {
-                pill.textContent = 'Auto-Sync Ready (GPS UTC Clock)';
+                pill.textContent = 'Auto-Sync Ready (Clock)';
                 pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30';
                 return;
             }
 
             if (state.syncStateMode === 'gps') {
-                pill.textContent = '✓ Auto-Synced to GPS UTC Clock';
+                pill.textContent = '✓ Synced by Clock';
                 pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30';
             } else if (state.syncStateMode === 'reset') {
                 pill.textContent = '0s Relative Elapsed Time';
@@ -1123,7 +1123,7 @@
             }
         }
 
-        // Automatically align all loaded tracks (or a single target track) to the Reference track's UTC GPS Clock
+        // Align all loaded tracks (or a single target track) to the Reference track by recording clock
         function autoSyncTracksByGpsClock(silent = false, singleTrackId = null) {
             ensureValidCompareSelection();
             const refTrack = state.tracks.find(t => t.id === state.referenceTrackId) || state.tracks[0];
@@ -1155,11 +1155,10 @@
             updateSyncStatusPillUI();
 
             if (!silent && state.tracks.length >= 2) {
-                showToast(`Auto-synced ${adjustedCount} track${adjustedCount === 1 ? '' : 's'} to "${refTrack.name}" GPS UTC clock!`);
+                showToast(`Auto-synced ${adjustedCount} track${adjustedCount === 1 ? '' : 's'} to "${refTrack.name}" by clock!`);
             }
         }
 
-        // Cross-correlate HR and GPS around the GPS clock base offset (±60s) to remove 1-5s sensor buffer lag
         // Mark a specific loaded device as the known-good Master HR Reference device
         function setReferenceTrack(trackId) {
             const trk = state.tracks.find(t => t.id === trackId);
@@ -1171,7 +1170,7 @@
                 const nextIdx = (idxA + 1) % state.tracks.length;
                 state.compareIdB = state.tracks[nextIdx].id;
             }
-            // Automatically re-sync all tracks by GPS UTC Clock against the newly selected Reference track
+            // Re-sync all tracks by clock against the newly selected Reference track
             autoSyncTracksByGpsClock(true);
 
             // If 3+ tracks are loaded, automatically switch to Reference vs All mode when user stars a Reference track
@@ -1179,20 +1178,20 @@
                 setComparisonMode('reference');
             }
             updateAllVisuals();
-            showToast(`Set "${trk.name}" as HR Reference & auto-synced all tracks to its GPS clock`);
+            showToast(`Set "${trk.name}" as HR Reference & synced all tracks to its clock`);
         }
 
         // Mark a specific loaded device as the known-good GPS Track Reference device (independent from HR Reference)
         function setGpsReferenceTrack(trackId) {
             const trk = state.tracks.find(t => t.id === trackId);
             if (!trk) return;
+            if (!trackHasGps(trk)) {
+                showToast(`"${trk.name}" has no GPS data, so it can't be the GPS reference.`);
+                return;
+            }
             state.gpsReferenceTrackId = trk.id;
             state.gpsCompareIdA = trk.id;
-            if (state.tracks.length > 1 && state.gpsCompareIdB === state.gpsCompareIdA) {
-                const idxA = state.tracks.findIndex(t => t.id === state.gpsCompareIdA);
-                const nextIdx = (idxA + 1) % state.tracks.length;
-                state.gpsCompareIdB = state.tracks[nextIdx].id;
-            }
+            if (state.gpsCompareIdB === state.gpsCompareIdA) state.gpsCompareIdB = null; // re-picked below
             if (state.tracks.length > 2 && state.comparisonMode !== 'reference') {
                 setComparisonMode('reference');
             }
@@ -1931,13 +1930,13 @@
                     syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">★ Reference Clock (0s)</span>`;
                 } else if (trk.syncMethod === 'gps' || offsetVal === gpsClockDelta) {
                     const sign = gpsClockDelta >= 0 ? '+' : '';
-                    syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30">${sign}${gpsClockDelta}s GPS Auto-Sync</span>`;
+                    syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30">${sign}${gpsClockDelta}s Clock Sync</span>`;
                 } else {
                     const gpsSign = gpsClockDelta >= 0 ? '+' : '';
-                    syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">${offsetFormatted} Manual (GPS Δ: ${gpsSign}${gpsClockDelta}s)</span>`;
+                    syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">${offsetFormatted} Manual (Clock Δ: ${gpsSign}${gpsClockDelta}s)</span>`;
                 }
 
-                // Allow slider range to dynamically expand if GPS clock offset is beyond +-300s
+                // Allow slider range to dynamically expand if the clock offset is beyond +-300s
                 const sliderMin = Math.min(-300, offsetVal - 60);
                 const sliderMax = Math.max(300, offsetVal + 60);
 
@@ -1975,10 +1974,13 @@
                             </button>
 
                             <!-- Set as GPS Reference Button (Independent of HR Ref) -->
-                            <button type="button" data-id="${trk.id}" class="set-gps-ref-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${isGpsRef ? 'bg-violet-600 text-white border-violet-500 shadow-sm shadow-violet-500/20' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-violet-500/50 hover:text-violet-500'}" title="Mark this device as your GPS Track Reference (e.g., Garmin Fenix 9 Pro)">
+                            ${trackHasGps(trk) ? `<button type="button" data-id="${trk.id}" class="set-gps-ref-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${isGpsRef ? 'bg-violet-600 text-white border-violet-500 shadow-sm shadow-violet-500/20' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-violet-500/50 hover:text-violet-500'}" title="Mark this device as your GPS Track Reference (e.g., Garmin Fenix 9 Pro)">
                                 <i data-lucide="map-pin" class="w-3.5 h-3.5 ${isGpsRef ? 'fill-white text-white' : ''}"></i>
                                 <span>${isGpsRef ? 'GPS Ref' : 'Set GPS Ref'}</span>
-                            </button>
+                            </button>` : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500" title="This device recorded no GPS positions (e.g. a heart-rate strap), so it's only used for heart-rate comparisons">
+                                <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+                                <span>No GPS</span>
+                            </span>`}
 
                             <!-- Toggle Visibility -->
                             <button type="button" data-id="${trk.id}" class="toggle-vis-btn p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer" title="Show/Hide Track">
@@ -2008,7 +2010,7 @@
                             <button type="button" data-id="${trk.id}" data-step="-1" class="step-sync-btn px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer" title="Shift track -1 second">-1s</button>
                             <button type="button" data-id="${trk.id}" data-step="1" class="step-sync-btn px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer" title="Shift track +1 second">+1s</button>
                             <button type="button" data-id="${trk.id}" data-step="5" class="step-sync-btn px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer" title="Shift track +5 seconds">+5s</button>
-                            <button type="button" data-id="${trk.id}" class="trk-gps-sync-btn px-2 py-1 rounded-lg text-[11px] font-semibold bg-orange-400/15 hover:bg-orange-400/25 text-orange-600 dark:text-orange-300 border border-orange-400/30 transition-colors cursor-pointer" title="Sync this track to Reference GPS UTC clock">GPS Sync</button>
+                            <button type="button" data-id="${trk.id}" class="trk-gps-sync-btn px-2 py-1 rounded-lg text-[11px] font-semibold bg-orange-400/15 hover:bg-orange-400/25 text-orange-600 dark:text-orange-300 border border-orange-400/30 transition-colors cursor-pointer" title="Sync this track to the Reference device by clock">Clock Sync</button>
                             <button type="button" data-id="${trk.id}" class="trk-zero-btn px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-rose-500/10 text-slate-500 hover:text-rose-500 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer" title="Reset this track offset to 0s">0s</button>
                         </div>
                     </div>
@@ -2099,6 +2101,16 @@
             });
         }
 
+        // A track "has GPS" when it recorded at least two GPS positions (heart-rate straps like the Polar H10 don't)
+        function trackHasGps(trk) {
+            return !!trk && (trk.stats?.validGpsCount || 0) >= 2;
+        }
+        // Tracks usable for GPS comparisons; falls back to all tracks when none have GPS
+        function gpsCapableTracks(list = state.tracks) {
+            const withGps = list.filter(trackHasGps);
+            return withGps.length > 0 ? withGps : list;
+        }
+
         function ensureValidCompareSelection() {
             if (state.tracks.length === 0) {
                 state.compareIdA = null;
@@ -2112,18 +2124,27 @@
             if (!state.tracks.some(t => t.id === state.referenceTrackId)) {
                 state.referenceTrackId = state.tracks[0].id;
             }
-            if (!state.tracks.some(t => t.id === state.gpsReferenceTrackId)) {
-                state.gpsReferenceTrackId = state.tracks[0].id;
+            const gpsPool = gpsCapableTracks();
+            if (!gpsPool.some(t => t.id === state.gpsReferenceTrackId)) {
+                state.gpsReferenceTrackId = gpsPool[0].id;
             }
             if (!state.tracks.some(t => t.id === state.compareIdA)) {
                 state.compareIdA = state.referenceTrackId || state.tracks[0].id;
             }
-            if (!state.tracks.some(t => t.id === state.gpsCompareIdA)) {
-                state.gpsCompareIdA = state.gpsReferenceTrackId || state.tracks[0].id;
+            if (!gpsPool.some(t => t.id === state.gpsCompareIdA)) {
+                state.gpsCompareIdA = state.gpsReferenceTrackId || gpsPool[0].id;
+            }
+            if (gpsPool.length === 1) {
+                state.gpsCompareIdB = gpsPool[0].id;
+            } else {
+                // Ensure GPS gpsCompareIdB is a different GPS-capable track
+                if (!gpsPool.some(t => t.id === state.gpsCompareIdB) || state.gpsCompareIdB === state.gpsCompareIdA) {
+                    const idxGpsA = gpsPool.findIndex(t => t.id === state.gpsCompareIdA);
+                    state.gpsCompareIdB = gpsPool[(idxGpsA + 1) % gpsPool.length].id;
+                }
             }
             if (state.tracks.length === 1) {
                 state.compareIdB = state.tracks[0].id;
-                state.gpsCompareIdB = state.tracks[0].id;
             } else {
                 // Ensure HR compareIdB is distinct from HR compareIdA
                 const bExists = state.tracks.some(t => t.id === state.compareIdB);
@@ -2131,13 +2152,6 @@
                     const idxA = state.tracks.findIndex(t => t.id === state.compareIdA);
                     const nextIdx = (idxA + 1) % state.tracks.length;
                     state.compareIdB = state.tracks[nextIdx].id;
-                }
-                // Ensure GPS gpsCompareIdB is distinct from GPS gpsCompareIdA
-                const gpsBExists = state.tracks.some(t => t.id === state.gpsCompareIdB);
-                if (!gpsBExists || state.gpsCompareIdB === state.gpsCompareIdA) {
-                    const idxGpsA = state.tracks.findIndex(t => t.id === state.gpsCompareIdA);
-                    const nextGpsIdx = (idxGpsA + 1) % state.tracks.length;
-                    state.gpsCompareIdB = state.tracks[nextGpsIdx].id;
                 }
             }
         }
@@ -2163,12 +2177,15 @@
             selA.value = state.compareIdA;
             selB.value = state.compareIdB;
 
+            const gpsOptionsHtml = state.tracks.map(t => trackHasGps(t)
+                ? `<option value="${t.id}">${escapeHtml(t.name)}</option>`
+                : `<option value="${t.id}" disabled>${escapeHtml(t.name)} (no GPS)</option>`).join('');
             if (gpsSelA) {
-                gpsSelA.innerHTML = optionsHtml;
+                gpsSelA.innerHTML = gpsOptionsHtml;
                 gpsSelA.value = state.gpsCompareIdA;
             }
             if (gpsSelB) {
-                gpsSelB.innerHTML = optionsHtml;
+                gpsSelB.innerHTML = gpsOptionsHtml;
                 gpsSelB.value = state.gpsCompareIdB;
             }
         }
@@ -2218,7 +2235,7 @@
             // Check if Reference vs All mode is active
             if (state.comparisonMode === 'reference') {
                 const refComparisons = computeMasterReferenceComparisons(trkA);
-                const gpsRefComparisons = computeMasterReferenceComparisons(gpsTrkA);
+                const gpsRefComparisons = computeMasterReferenceComparisons(gpsTrkA, gpsCapableTracks(state.tracks.filter(t => t.visible)));
                 if (hrRefContainer) hrRefContainer.classList.remove('hidden');
                 if (gpsRefContainer) gpsRefContainer.classList.remove('hidden');
                 if (hrRefHeading) hrRefHeading.textContent = `HR Master Reference: ${trkA.name} — vs. ${refComparisons.length} Challenger Track${refComparisons.length === 1 ? '' : 's'}`;
@@ -2409,11 +2426,11 @@
                 const dSign = gpsSim.distDiffMeters > 0 ? '+' : '';
                 elGpsDistDelta.textContent = `Δ Dist: ${dSign}${gpsSim.distDiffMeters}m (${gpsSim.distDiffPct}%)`;
 
-                elDropA.textContent = `${gpsTrkA.stats.dropoutCount} dropout${gpsTrkA.stats.dropoutCount === 1 ? '' : 's'}`;
+                elDropA.textContent = trackHasGps(gpsTrkA) ? `${gpsTrkA.stats.dropoutCount} dropout${gpsTrkA.stats.dropoutCount === 1 ? '' : 's'}` : 'No GPS data';
                 elDropA.className = `text-sm font-bold font-mono mt-0.5 ${gpsTrkA.stats.dropoutCount === 0 ? 'text-emerald-500' : 'text-rose-500'}`;
                 elDropTimeA.textContent = `${gpsTrkA.stats.totalDropoutSec}s lost (${gpsTrkA.stats.gpsIntegrityPct}% fix)`;
 
-                elDropB.textContent = `${gpsTrkB.stats.dropoutCount} dropout${gpsTrkB.stats.dropoutCount === 1 ? '' : 's'}`;
+                elDropB.textContent = trackHasGps(gpsTrkB) ? `${gpsTrkB.stats.dropoutCount} dropout${gpsTrkB.stats.dropoutCount === 1 ? '' : 's'}` : 'No GPS data';
                 elDropB.className = `text-sm font-bold font-mono mt-0.5 ${gpsTrkB.stats.dropoutCount === 0 ? 'text-emerald-500' : 'text-amber-500'}`;
                 elDropTimeB.textContent = `${gpsTrkB.stats.totalDropoutSec}s lost (${gpsTrkB.stats.gpsIntegrityPct}% fix)`;
 
@@ -2423,6 +2440,23 @@
                 document.getElementById('elevGainA').textContent = `+${gpsTrkA.stats.elevGainMeters} m`;
                 document.getElementById('elevGainB').textContent = `+${gpsTrkB.stats.elevGainMeters} m`;
                 document.getElementById('elevMeanDiff').textContent = gpsSim.meanAltDiff != null ? `±${gpsSim.meanAltDiff} m` : '—';
+
+                // Only one GPS device loaded (e.g. Polar H10 + one watch): don't compare the watch with itself
+                if (gpsTrkA.id === gpsTrkB.id) {
+                    elGpsMatch.textContent = '—';
+                    elGpsWithin5.textContent = 'Needs 2 GPS devices';
+                    elGpsMean.textContent = '—';
+                    elGpsMax.textContent = 'Needs 2 GPS devices';
+                    elGpsDistCmp.textContent = `${(gpsTrkA.stats.distanceMeters / 1000).toFixed(2)} km`;
+                    elGpsDistDelta.textContent = 'Only one GPS device';
+                    elDropB.textContent = '—';
+                    elDropB.className = 'text-sm font-bold font-mono mt-0.5 text-slate-400';
+                    elDropTimeB.textContent = 'Needs 2 GPS devices';
+                    elGpsWithin10.textContent = '—';
+                    elGpsIntegrity.textContent = 'Load a 2nd GPS device to compare';
+                    document.getElementById('elevGainB').textContent = '—';
+                    document.getElementById('elevMeanDiff').textContent = '—';
+                }
             }
         }
 
@@ -2946,8 +2980,8 @@
                     <td class="py-3 px-3">${(trk.stats.distanceMeters / 1000).toFixed(2)} km</td>
                     <td class="py-3 px-3 font-bold text-rose-500">${trk.stats.avgHR ? trk.stats.avgHR + ' bpm' : '—'}</td>
                     <td class="py-3 px-3">${trk.stats.maxHR ? trk.stats.maxHR + ' bpm' : '—'}</td>
-                    <td class="py-3 px-3 ${trk.stats.dropoutCount === 0 ? 'text-emerald-500' : 'text-amber-500 font-semibold'}">
-                        ${trk.stats.dropoutCount} (${trk.stats.totalDropoutSec}s lost)
+                    <td class="py-3 px-3 ${!trackHasGps(trk) ? 'text-slate-400' : trk.stats.dropoutCount === 0 ? 'text-emerald-500' : 'text-amber-500 font-semibold'}">
+                        ${trackHasGps(trk) ? `${trk.stats.dropoutCount} (${trk.stats.totalDropoutSec}s lost)` : 'No GPS data'}
                     </td>
                     <td class="py-3 px-3 text-sky-400">+${trk.stats.elevGainMeters} m</td>
                     <td class="py-3 px-3 text-slate-400">${trk.stats.pointCount.toLocaleString()}</td>
@@ -3819,7 +3853,8 @@
             const gridMinor = isDark ? 'rgba(56, 189, 248, 0.05)' : 'rgba(15, 23, 42, 0.04)';
 
             const visibleTracks = state.tracks.filter(t => t.visible);
-            const activeTracks = visibleTracks.length > 0 ? visibleTracks : state.tracks;
+            // GPS report only covers devices that recorded GPS (HR-only straps are left out)
+            const activeTracks = gpsCapableTracks(visibleTracks.length > 0 ? visibleTracks : state.tracks);
             const gpsRefId = state.gpsReferenceTrackId || state.gpsCompareIdA || state.compareIdA;
             const trkA = state.tracks.find(t => t.id === (isRefMode ? gpsRefId : (state.gpsCompareIdA || gpsRefId))) || activeTracks[0];
             const trkB = state.tracks.find(t => t.id === (state.gpsCompareIdB || state.compareIdB)) || activeTracks[1] || activeTracks[0];
@@ -5100,7 +5135,7 @@
                     // Ensure reference & comparison track IDs are initialized
                     ensureValidCompareSelection();
 
-                    // Automatically synchronize all tracks by GPS UTC start clock
+                    // Automatically synchronize all tracks by recording clock
                     if (state.tracks.length >= 2) {
                         autoSyncTracksByGpsClock(true);
                     }
@@ -5111,7 +5146,7 @@
                     if (loadedCount === 1) {
                         showToast(`Loaded "${lastLoadedName}" (${state.tracks.length} total track${state.tracks.length === 1 ? '' : 's'})`);
                     } else {
-                        showToast(`Loaded ${loadedCount} activity tracks & auto-synced by GPS UTC clock!`);
+                        showToast(`Loaded ${loadedCount} activity tracks & synced them by clock!`);
                     }
                 }
             } catch (err) {
@@ -5186,7 +5221,7 @@
             if (globalGpsSyncBtn) {
                 globalGpsSyncBtn.addEventListener('click', () => {
                     if (state.tracks.length < 2) {
-                        showToast('Load at least 2 tracks to auto-sync by GPS UTC clock.');
+                        showToast('Load at least 2 tracks to sync by clock.');
                         return;
                     }
                     autoSyncTracksByGpsClock(false);
@@ -5237,11 +5272,7 @@
                 gpsCompareSelectA.addEventListener('change', e => {
                     state.gpsCompareIdA = e.target.value;
                     state.gpsReferenceTrackId = e.target.value;
-                    if (state.tracks.length > 1 && state.gpsCompareIdB === state.gpsCompareIdA) {
-                        const idxA = state.tracks.findIndex(t => t.id === state.gpsCompareIdA);
-                        const nextIdx = (idxA + 1) % state.tracks.length;
-                        state.gpsCompareIdB = state.tracks[nextIdx].id;
-                    }
+                    if (state.gpsCompareIdB === state.gpsCompareIdA) state.gpsCompareIdB = null; // re-picked by ensureValidCompareSelection
                     updateAllVisuals();
                 });
             }
