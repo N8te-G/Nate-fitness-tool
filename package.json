@@ -3,7 +3,8 @@
   "private": true,
   "description": "Build tooling for Nate's Fitness Tool (the app itself is plain HTML).",
   "scripts": {
-    "build:css": "tailwindcss -i ./src/tailwind.css -o ./vendor/tailwind.css --minify"
+    "build:css": "tailwindcss -i ./src/tailwind.css -o ./vendor/tailwind.css --minify",
+    "build:golden": "node scripts/build-golden-master.js"
   },
   "devDependencies": {
     "tailwindcss": "3.4.17"

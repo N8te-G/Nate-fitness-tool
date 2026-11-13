@@ -17,10 +17,15 @@ Your activity files never leave your device — everything is processed in the b
 
 ## Standalone file (Golden Master)
 
-`Nates_Fitness_Tool_Golden_Master.html` is the single-file version of the app. Download it and open it
-directly from your phone or computer — no install or website needed (an internet connection is still
-needed the first time to load its libraries and map tiles). It is a frozen known-good snapshot; the
-live app is `index.html`.
+`Nates_Fitness_Tool_Golden_Master.html` is a known-good, fully self-contained copy of the app in a
+single file: download it and open it directly on your phone or computer. Its styles, libraries and
+icons are built in, so it works without internet (only map backgrounds need a connection).
+
+It is only updated on purpose. To rebuild it from the current `index.html`:
+
+```
+npm run build:golden
+```
 
 ## Development notes
 
