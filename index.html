@@ -24,37 +24,19 @@
     </script>
     <title>Nate's Fitness Tool — TCX & GPX Fitness Data Comparator</title>
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        slate: {
-                            850: '#151e2e',
-                            950: '#090d16'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
+    <link rel="stylesheet" href="./vendor/tailwind.css">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="./vendor/chart.umd.min.js"></script>
     <!-- Leaflet CSS & JS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
+    <script src="./vendor/leaflet/leaflet.js"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@1.62.0"></script>
+    <script src="./vendor/lucide.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -944,10 +926,11 @@
             if (!('caches' in window)) return false;
             const urls = [
                 window.location.href,
-                'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
-                'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-                'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-                'https://unpkg.com/lucide@1.62.0'
+                new URL('./vendor/tailwind.css', window.location.href).href,
+                new URL('./vendor/chart.umd.min.js', window.location.href).href,
+                new URL('./vendor/leaflet/leaflet.css', window.location.href).href,
+                new URL('./vendor/leaflet/leaflet.js', window.location.href).href,
+                new URL('./vendor/lucide.min.js', window.location.href).href
             ];
             try {
                 const cache = await caches.open('nates-fitness-tool-v2');

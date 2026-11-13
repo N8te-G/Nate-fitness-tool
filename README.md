@@ -21,3 +21,18 @@ Your activity files never leave your device — everything is processed in the b
 directly from your phone or computer — no install or website needed (an internet connection is still
 needed the first time to load its libraries and map tiles). It is a frozen known-good snapshot; the
 live app is `index.html`.
+
+## Development notes
+
+The app is plain HTML with its libraries stored in `vendor/` (no outside CDNs), so it works in
+browsers that block third-party scripts (e.g. Brave Shields) and fully offline once installed.
+
+Styling uses a prebuilt Tailwind stylesheet (`vendor/tailwind.css`). After adding or changing
+Tailwind classes in `index.html`, rebuild it:
+
+```
+npm install
+npm run build:css
+```
+
+If you change files the installed app caches, bump `CACHE` in `sw.js` so phones pick them up.
