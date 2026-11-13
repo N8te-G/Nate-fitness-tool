@@ -33,7 +33,8 @@ The app is plain HTML with its libraries stored in `vendor/` (no outside CDNs), 
 browsers that block third-party scripts (e.g. Brave Shields) and fully offline once installed.
 
 Icons are built into `index.html` (only the ~30 Lucide icons the app uses; add new ones to the `ICONS` list there).
-Styling uses a prebuilt Tailwind stylesheet (`vendor/tailwind.css`). After adding or changing
+Styling uses a prebuilt Tailwind stylesheet (`vendor/tailwind.css`, linked with a content-hash `?v=` so updates never mix
+an old stylesheet with a new page). After adding or changing
 Tailwind classes in `index.html`, rebuild it:
 
 ```
@@ -41,4 +42,5 @@ npm install
 npm run build:css
 ```
 
-If you change files the installed app caches, bump `CACHE` in `sw.js` so phones pick them up.
+The service worker (`sw.js`) is network-first for the app's own files, so phones always get the latest version when
+online and fall back to saved copies offline. Bump `CACHE` in `sw.js` when you add new files that should work offline.

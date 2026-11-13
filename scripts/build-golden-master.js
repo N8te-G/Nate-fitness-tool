@@ -21,8 +21,11 @@ const safeScript = js => js.replace(/<\/script/gi, '<\\/script');
 let leafletCss = read('vendor/leaflet/leaflet.css').toString()
     .replace(/url\(images\/([\w-]+\.png)\)/g, (m, f) => `url(${dataUri('vendor/leaflet/images/' + f, 'image/png')})`);
 
-replaceOnce('<link rel="stylesheet" href="./vendor/tailwind.css">',
-    `<style>/* Tailwind (prebuilt) */\n${read('vendor/tailwind.css')}\n</style>`);
+{
+    const m = html.match(/<link rel="stylesheet" href="\.\/vendor\/tailwind\.css(?:\?v=[^"]*)?">/);
+    if (!m) throw new Error('Tailwind stylesheet link not found');
+    replaceOnce(m[0], `<style>/* Tailwind (prebuilt) */\n${read('vendor/tailwind.css')}\n</style>`);
+}
 replaceOnce('<link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />',
     `<style>/* Leaflet 1.9.4 */\n${leafletCss}\n</style>`);
 replaceOnce('<script src="./vendor/chart.umd.min.js"></script>',

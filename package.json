@@ -3,7 +3,7 @@
   "private": true,
   "description": "Build tooling for Nate's HeartMatch (the app itself is plain HTML).",
   "scripts": {
-    "build:css": "tailwindcss -i ./src/tailwind.css -o ./vendor/tailwind.css --minify",
+    "build:css": "tailwindcss -i ./src/tailwind.css -o ./vendor/tailwind.css --minify && node scripts/stamp-css.js",
     "build:golden": "node scripts/build-golden-master.js"
   },
   "devDependencies": {

@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=09d51e0bf5">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -987,26 +987,9 @@
                 console.warn('Dynamic manifest setup warning:', e);
             }
 
-            // Pre-cache critical external libraries in Browser Cache API when available
-            preCacheExternalLibraries();
-
-            // Register Service Worker: try physical ./sw.js first (for 1-click Chrome PWA install), then blob fallback
+            // Register the service worker (offline support + install). It also manages all caching.
             if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-                navigator.serviceWorker.register('./sw.js').catch(() => {
-                    const swCode = `
-                        const CACHE_NAME = 'nates-fitness-tool-v2';
-                        self.addEventListener('install', event => self.skipWaiting());
-                        self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
-                        self.addEventListener('fetch', event => {
-                            event.respondWith(caches.match(event.request).then(c => c || fetch(event.request)));
-                        });
-                    `;
-                    try {
-                        const swBlob = new Blob([swCode], { type: 'application/javascript' });
-                        const swUrl = URL.createObjectURL(swBlob);
-                        navigator.serviceWorker.register(swUrl).catch(() => {});
-                    } catch (_) {}
-                });
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
             }
 
             // Monitor Online / Offline network status
@@ -1034,24 +1017,6 @@
             const manifestDataUri = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(manifestJson);
             const manifestLink = document.getElementById('dynamicManifestLink');
             if (manifestLink) manifestLink.setAttribute('href', manifestDataUri);
-        }
-
-        async function preCacheExternalLibraries() {
-            if (!('caches' in window)) return false;
-            const urls = [
-                window.location.href,
-                new URL('./vendor/tailwind.css', window.location.href).href,
-                new URL('./vendor/chart.umd.min.js', window.location.href).href,
-                new URL('./vendor/leaflet/leaflet.css', window.location.href).href,
-                new URL('./vendor/leaflet/leaflet.js', window.location.href).href
-            ];
-            try {
-                const cache = await caches.open('nates-fitness-tool-v2');
-                await Promise.allSettled(urls.map(u => fetch(u, { mode: 'cors' }).then(r => r.ok && cache.put(u, r))));
-                return true;
-            } catch (_) {
-                return false;
-            }
         }
 
         function updateNetworkStatusUI() {
