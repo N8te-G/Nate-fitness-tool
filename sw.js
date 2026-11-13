@@ -4,7 +4,7 @@
 //   Saved copies are only used when offline.
 // - Web fonts are cache-first (they never change).
 // - Map tiles and anything else are left to the network.
-const CACHE = 'nft-v15';
+const CACHE = 'nft-v16';
 
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './icon.svg',
     './vendor/tailwind.css', './vendor/chart.umd.min.js',
