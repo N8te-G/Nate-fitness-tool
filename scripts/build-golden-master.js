@@ -30,10 +30,6 @@ replaceOnce('<link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />',
     `<style>/* Leaflet 1.9.4 */\n${leafletCss}\n</style>`);
 replaceOnce('<script src="./vendor/chart.umd.min.js"></script>',
     `<script>/* Chart.js 4.4.1 (MIT) */\n${safeScript(read('vendor/chart.umd.min.js').toString())}\n</script>`);
-replaceOnce('<script src="./vendor/hammer.min.js"></script>',
-    `<script>/* Hammer.js 2.0.8 (MIT) */\n${safeScript(read('vendor/hammer.min.js').toString())}\n</script>`);
-replaceOnce('<script src="./vendor/chartjs-plugin-zoom.min.js"></script>',
-    `<script>/* chartjs-plugin-zoom 2.2.0 (MIT) */\n${safeScript(read('vendor/chartjs-plugin-zoom.min.js').toString())}\n</script>`);
 replaceOnce('<script src="./vendor/leaflet/leaflet.js"></script>',
     `<script>/* Leaflet 1.9.4 (BSD-2-Clause) */\n${safeScript(read('vendor/leaflet/leaflet.js').toString())}\n</script>`);
 
