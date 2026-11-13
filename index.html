@@ -10,7 +10,9 @@
     <meta name="apple-mobile-web-app-title" content="NateFitness">
     <meta name="mobile-web-app-capable" content="yes">
     <link id="dynamicManifestLink" rel="manifest" href="./manifest.json">
-    <link id="dynamicTouchIconLink" rel="apple-touch-icon" href="./icon-192.png">
+    <link id="dynamicTouchIconLink" rel="apple-touch-icon" href="./apple-touch-icon.png">
+    <link rel="icon" type="image/svg+xml" href="./icon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
     <script>
         // Theme: dark by default; switch to light only if the user chose it
         try {
@@ -777,63 +779,46 @@
         /********************************************************************
          * PWA MANIFEST, DYNAMIC ICON GENERATOR & OFFLINE ENGINE
          ********************************************************************/
+        // Draws the app icon (same design as icon.svg): two heart-rate traces on a sunset gradient
         function generateAppIconDataURL(size = 512) {
             const canvas = document.createElement('canvas');
             canvas.width = size;
             canvas.height = size;
             const ctx = canvas.getContext('2d');
+            ctx.scale(size / 512, size / 512);
 
-            // Rounded dark slate background with vibrant rose-orange gradient border
-            const grad = ctx.createLinearGradient(0, 0, size, size);
-            grad.addColorStop(0, '#f43f5e');
-            grad.addColorStop(1, '#f97316');
+            const bg = ctx.createLinearGradient(0, 0, 512, 512);
+            bg.addColorStop(0, '#FF9A5B');
+            bg.addColorStop(0.5, '#F43F5E');
+            bg.addColorStop(1, '#7C3AED');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, 512, 512);
 
-            ctx.fillStyle = '#0f172a';
-            ctx.beginPath();
-            ctx.roundRect(0, 0, size, size, size * 0.22);
-            ctx.fill();
+            const hl = ctx.createRadialGradient(113, 61, 0, 113, 61, 384);
+            hl.addColorStop(0, 'rgba(255, 255, 255, 0.30)');
+            hl.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = hl;
+            ctx.fillRect(0, 0, 512, 512);
 
-            ctx.lineWidth = size * 0.045;
-            ctx.strokeStyle = grad;
-            ctx.stroke();
-
-            // Draw stylized dual ECG heart-rate comparison wave
-            ctx.save();
+            ctx.lineWidth = 26;
             ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
+            ctx.shadowColor = 'rgba(59, 7, 100, 0.3)';
+            ctx.shadowBlur = 18;
+            ctx.shadowOffsetY = 8;
+            ctx.strokeStyle = '#1E1B4B';
+            ctx.stroke(new Path2D('M112 316 C 166 316, 186 226, 240 226 S 302 352, 352 318 S 386 240, 400 236'));
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.stroke(new Path2D('M112 262 C 166 262, 182 168, 236 168 S 300 300, 350 262 S 384 182, 400 176'));
+            ctx.shadowColor = 'transparent';
 
-            // Secondary comparison wave (Blue)
+            ctx.fillStyle = '#1E1B4B';
             ctx.beginPath();
-            ctx.moveTo(size * 0.14, size * 0.56);
-            ctx.lineTo(size * 0.30, size * 0.56);
-            ctx.lineTo(size * 0.39, size * 0.36);
-            ctx.lineTo(size * 0.49, size * 0.74);
-            ctx.lineTo(size * 0.61, size * 0.26);
-            ctx.lineTo(size * 0.71, size * 0.56);
-            ctx.lineTo(size * 0.86, size * 0.56);
-            ctx.strokeStyle = '#3b82f6';
-            ctx.lineWidth = size * 0.055;
-            ctx.stroke();
-
-            // Primary ECG pulse wave (Rose/Orange)
+            ctx.arc(400, 236, 13, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
-            ctx.moveTo(size * 0.14, size * 0.52);
-            ctx.lineTo(size * 0.28, size * 0.52);
-            ctx.lineTo(size * 0.37, size * 0.30);
-            ctx.lineTo(size * 0.47, size * 0.72);
-            ctx.lineTo(size * 0.59, size * 0.20);
-            ctx.lineTo(size * 0.69, size * 0.52);
-            ctx.lineTo(size * 0.86, size * 0.52);
-            ctx.strokeStyle = grad;
-            ctx.lineWidth = size * 0.065;
-            ctx.stroke();
-
-            // "NF" badge at bottom
-            ctx.fillStyle = '#f8fafc';
-            ctx.font = `bold ${Math.round(size * 0.14)}px Inter, sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.fillText('NATE FIT', size * 0.5, size * 0.88);
-            ctx.restore();
+            ctx.arc(400, 176, 17, 0, Math.PI * 2);
+            ctx.fill();
 
             return canvas.toDataURL('image/png');
         }
@@ -843,8 +828,6 @@
                 const icon192 = generateAppIconDataURL(192);
                 const icon512 = generateAppIconDataURL(512);
 
-                const touchIconLink = document.getElementById('dynamicTouchIconLink');
-                if (touchIconLink) touchIconLink.href = icon192;
 
                 // Check if physical ./manifest.json is reachable (when hosted on Netlify/GitHub/etc.);
                 // otherwise fall back to dynamic Data URI manifest.
