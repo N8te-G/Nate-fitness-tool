@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=39f83eaf70">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=3075706f8f">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -132,6 +132,43 @@
                 linear-gradient(to right, rgba(56, 189, 248, 0.16) 1px, transparent 1px),
                 linear-gradient(to bottom, rgba(56, 189, 248, 0.16) 1px, transparent 1px) !important;
             background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px !important;
+        }
+        /* Sync offset slider: large thumb, filled track, horizontal drags go to the slider */
+        .offset-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 32px;
+            background: transparent;
+            touch-action: none;
+        }
+        .offset-slider::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 999px;
+            background: linear-gradient(to right, #F43F5E var(--pct, 50%), rgba(148, 163, 184, 0.35) var(--pct, 50%));
+        }
+        .offset-slider::-moz-range-track {
+            height: 6px;
+            border-radius: 999px;
+            background: linear-gradient(to right, #F43F5E var(--pct, 50%), rgba(148, 163, 184, 0.35) var(--pct, 50%));
+        }
+        .offset-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 22px;
+            height: 22px;
+            margin-top: -8px;
+            border-radius: 50%;
+            background: #F43F5E;
+            border: 3px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+        .offset-slider::-moz-range-thumb {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #F43F5E;
+            border: 3px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
         }
         input[type="range"],
         input[type="checkbox"] {
@@ -1934,6 +1971,18 @@
             updateAllVisuals();
         }
 
+        // Light refresh while a sync slider is being dragged (charts + stats, at most every ~120 ms)
+        let offsetDragTimer = 0;
+        function scheduleOffsetDragRefresh() {
+            if (offsetDragTimer) return;
+            offsetDragTimer = setTimeout(() => {
+                offsetDragTimer = 0;
+                updateSyncStatusPillUI();
+                renderSimilarityAnalytics();
+                renderCharts();
+            }, 120);
+        }
+
         function renderFileList() {
             const container = document.getElementById('fileListContainer');
             const badge = document.getElementById('fileCountBadge');
@@ -1974,9 +2023,10 @@
                     syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">${offsetFormatted} Manual (Clock Δ: ${gpsSign}${gpsClockDelta}s)</span>`;
                 }
 
-                // Allow slider range to dynamically expand if the clock offset is beyond +-300s
-                const sliderMin = Math.min(-300, offsetVal - 60);
-                const sliderMax = Math.max(300, offsetVal + 60);
+                // Fine-grained slider: ±60 s around the clock-synced position, widened if the offset is outside it
+                const sliderMin = Math.min(gpsClockDelta - 60, offsetVal - 10);
+                const sliderMax = Math.max(gpsClockDelta + 60, offsetVal + 10);
+                const sliderPct = ((offsetVal - sliderMin) / (sliderMax - sliderMin)) * 100;
 
                 return `
                 <div class="flex flex-col gap-2.5 p-3.5 rounded-xl ${(isHrRef || isGpsRef) ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/40' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200/70 dark:border-slate-800'} border transition-all">
@@ -2032,15 +2082,18 @@
                         </div>
                     </div>
 
-                    <!-- Bottom Row: Per-Track Fine-Tune Sync Buttons & Wide Slider (-300s to +300s) -->
+                    <!-- Bottom Row: Per-Track Fine-Tune Sync Buttons & Slider (±60 s around the clock offset) -->
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/80 text-xs">
-                        <div class="flex items-center gap-1.5 flex-1 min-w-[220px]">
-                            <i data-lucide="clock" class="w-3.5 h-3.5 text-orange-500 shrink-0"></i>
-                            <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400 shrink-0">Sync Offset:</span>
-                            <input type="range" min="${sliderMin}" max="${sliderMax}" step="1" value="${offsetVal}" data-id="${trk.id}" class="offset-slider w-full max-w-[180px] cursor-pointer" />
-                            <span class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 min-w-[52px] text-center">
+                        <div class="w-full flex flex-col gap-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                                    <i data-lucide="clock" class="w-3.5 h-3.5 text-orange-500 shrink-0"></i>Sync offset
+                                </span>
+                                <span data-offset-readout="${trk.id}" class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 min-w-[52px] text-center">
                                 ${offsetFormatted}
                             </span>
+                            </div>
+                            <input type="range" min="${sliderMin}" max="${sliderMax}" step="1" value="${offsetVal}" data-id="${trk.id}" class="offset-slider w-full cursor-pointer" style="--pct:${sliderPct}%" aria-label="Sync offset in seconds" />
                         </div>
 
                         <div class="flex flex-wrap items-center gap-1">
@@ -2089,7 +2142,24 @@
             });
 
             container.querySelectorAll('.offset-slider').forEach(slider => {
+                // While dragging: update this track's offset, its readout and the charts, but don't rebuild
+                // the track list (that would replace the slider under the finger and end the drag)
                 slider.addEventListener('input', e => {
+                    const el = e.target;
+                    const trk = state.tracks.find(t => t.id === el.dataset.id);
+                    if (!trk) return;
+                    const val = parseInt(el.value, 10) || 0;
+                    trk.timeOffsetSec = val;
+                    trk.offsetSec = val;
+                    trk.syncMethod = 'manual';
+                    state.syncStateMode = 'manual';
+                    el.style.setProperty('--pct', `${((val - el.min) / (el.max - el.min)) * 100}%`);
+                    const readout = container.querySelector(`[data-offset-readout="${el.dataset.id}"]`);
+                    if (readout) readout.textContent = `${val >= 0 ? '+' : ''}${val}s`;
+                    scheduleOffsetDragRefresh();
+                });
+                // On release: full refresh (badges, list, everything)
+                slider.addEventListener('change', e => {
                     const val = parseInt(e.target.value, 10) || 0;
                     setTrackOffsetSec(e.target.dataset.id, val, 'manual');
                 });
