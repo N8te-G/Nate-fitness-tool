@@ -1,6 +1,6 @@
 {
-  "name": "Nate's Fitness Tool",
-  "short_name": "Nate Fitness",
+  "name": "Nate's HeartMatch",
+  "short_name": "HeartMatch",
   "description": "Compare heart rate, GPS and elevation from multiple TCX/GPX recordings of the same workout.",
   "id": "./",
   "start_url": "./",

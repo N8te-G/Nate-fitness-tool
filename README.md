@@ -1,4 +1,4 @@
-# Nate's Fitness Tool
+# Nate's HeartMatch
 
 Compare heart rate, GPS tracks and elevation from several TCX/GPX recordings of the same workout.
 
@@ -17,7 +17,7 @@ Your activity files never leave your device — everything is processed in the b
 
 ## Standalone file (Golden Master)
 
-`Nates_Fitness_Tool_Golden_Master.html` is a known-good, fully self-contained copy of the app in a
+`Nates_HeartMatch_Golden_Master.html` is a known-good, fully self-contained copy of the app in a
 single file: download it and open it directly on your phone or computer. Its styles, libraries and
 icons are built in, so it works without internet (only map backgrounds need a connection).
 
