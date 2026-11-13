@@ -179,6 +179,21 @@
         </div>
     </header>
 
+    <!-- Shown only when JavaScript is blocked or turned off (e.g. Brave Shields "Block scripts") -->
+    <noscript>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+            <div role="alert" class="flex items-start gap-3 p-4 rounded-2xl border border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-100">
+                <svg viewBox="0 0 24 24" class="w-6 h-6 shrink-0 text-amber-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <div class="text-sm">
+                    <p class="font-semibold">This app needs JavaScript to work</p>
+                    <p class="mt-1">Your browser is blocking scripts on this page, so files can't be loaded and nothing will respond.</p>
+                    <p class="mt-2"><span class="font-semibold">In Brave:</span> tap the lion icon in the address bar &rarr; turn off <span class="font-semibold">Block scripts</span> (or turn Shields off for this site).</p>
+                    <p class="mt-1"><span class="font-semibold">Other browsers:</span> allow JavaScript for this site in your browser's site settings, then reload.</p>
+                </div>
+            </div>
+        </div>
+    </noscript>
+
     <!-- One-time "install as an app" hint (shown once per device, never inside the installed app) -->
     <div id="installHint" role="dialog" aria-live="polite" aria-label="Install Nate's Fitness Tool" class="hidden fixed z-50 left-4 right-4 bottom-4 sm:left-auto sm:right-5 sm:bottom-5 sm:w-96" style="margin-bottom: env(safe-area-inset-bottom);">
         <div class="flex items-start gap-3 p-4 rounded-2xl shadow-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
