@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Nate's Fitness Tool app icon: two heart-rate traces (two devices) on a sunset gradient -->
+  <!-- Nate's Fitness Tool app icon: two-tone heart handshake (two devices agreeing) on a sunset gradient.
+       Heart-handshake shape from Lucide (ISC licence), split diagonally white / midnight. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#FF9A5B"/><stop offset="0.5" stop-color="#F43F5E"/><stop offset="1" stop-color="#7C3AED"/>
@@ -10,13 +11,15 @@
     <filter id="sh" x="-20%" y="-20%" width="140%" height="160%">
       <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#3B0764" flood-opacity="0.3"/>
     </filter>
+    <clipPath id="left"><polygon points="0,0 318,0 196,512 0,512"/></clipPath>
+    <clipPath id="right"><polygon points="318,0 512,0 512,512 196,512"/></clipPath>
+    <path id="heart" transform="translate(88 102) scale(14)" fill="none" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"
+          d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/>
   </defs>
   <rect width="512" height="512" fill="url(#bg)"/>
   <rect width="512" height="512" fill="url(#hl)"/>
-  <g filter="url(#sh)" fill="none" stroke-width="26" stroke-linecap="round">
-    <path d="M112 316 C 166 316, 186 226, 240 226 S 302 352, 352 318 S 386 240, 400 236" stroke="#1E1B4B"/>
-    <path d="M112 262 C 166 262, 182 168, 236 168 S 300 300, 350 262 S 384 182, 400 176" stroke="#FFFFFF"/>
+  <g filter="url(#sh)">
+    <use href="#heart" stroke="#1E1B4B" clip-path="url(#right)"/>
+    <use href="#heart" stroke="#FFFFFF" clip-path="url(#left)"/>
   </g>
-  <circle cx="400" cy="236" r="13" fill="#1E1B4B"/>
-  <circle cx="400" cy="176" r="17" fill="#FFFFFF"/>
 </svg>
