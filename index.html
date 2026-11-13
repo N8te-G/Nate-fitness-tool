@@ -283,8 +283,8 @@
                                     <span>Re-sync all by clock</span>
                                 </button>
                             </div>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                                Tracks are lined up automatically by the time each device recorded (satellite time on GPS watches, your phone's time on straps like the Polar H10), so you see each device's real timing.
+                            <p id="syncDescription" class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                Tracks will be lined up automatically by the time each device recorded (satellite time on GPS watches, your phone's time on straps like the Polar H10), so you see each device's real timing.
                             </p>
                         </div>
                     </div>
@@ -1126,6 +1126,22 @@
             if (!pill) return;
             const resyncLink = document.getElementById('globalGpsSyncBtn');
             if (resyncLink) resyncLink.classList.toggle('hidden', !(state.tracks.length >= 2 && state.syncStateMode !== 'gps'));
+            const resetLink = document.getElementById('globalResetSyncBtn');
+            if (resetLink) resetLink.classList.toggle('hidden', state.syncStateMode === 'reset' && state.tracks.length >= 2);
+            // Describe what is actually happening right now
+            const desc = document.getElementById('syncDescription');
+            if (desc) {
+                const how = "by the time each device recorded (satellite time on GPS watches, your phone's time on straps like the Polar H10)";
+                if (state.tracks.length < 2) {
+                    desc.textContent = `Tracks will be lined up automatically ${how}, so you see each device's real timing.`;
+                } else if (state.syncStateMode === 'gps') {
+                    desc.textContent = `Tracks are lined up automatically ${how}, so you see each device's real timing.`;
+                } else if (state.syncStateMode === 'reset') {
+                    desc.textContent = 'All tracks start at 0 s, ignoring when each device actually started recording. Tap Re-sync all by clock to line them up by recording time again.';
+                } else {
+                    desc.textContent = "You've adjusted the timing by hand, so tracks may no longer match when each device actually recorded. Tap Re-sync all by clock to undo.";
+                }
+            }
 
             if (state.tracks.length < 2) {
                 pill.textContent = 'Auto-Sync Ready (Clock)';
