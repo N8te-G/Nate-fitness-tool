@@ -25,13 +25,16 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=c9af12d37c">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=a5d39a1e7b">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <!-- Chart.js -->
     <script src="./vendor/chart.umd.min.js"></script>
+    <!-- Chart zoom: pinch/scroll zoom & pan (Hammer.js handles touch gestures) -->
+    <script src="./vendor/hammer.min.js"></script>
+    <script src="./vendor/chartjs-plugin-zoom.min.js"></script>
     <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
     <script src="./vendor/leaflet/leaflet.js"></script>
@@ -132,6 +135,10 @@
                 linear-gradient(to right, rgba(56, 189, 248, 0.16) 1px, transparent 1px),
                 linear-gradient(to bottom, rgba(56, 189, 248, 0.16) 1px, transparent 1px) !important;
             background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px !important;
+        }
+        #hrChartCanvas,
+        #deltaChartCanvas {
+            touch-action: pan-y !important;
         }
         input[type="range"],
         input[type="checkbox"] {
@@ -480,6 +487,16 @@
                         <i data-lucide="image-down" class="w-3.5 h-3.5"></i>
                         <span>Export HR Chart Image</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- Chart zoom controls -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">Pinch to zoom, swipe sideways to pan<span class="hidden sm:inline"> · Ctrl + scroll on a computer</span></p>
+                <div class="inline-flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs font-semibold">
+                    <button type="button" id="hrZoomOutBtn" class="px-2.5 py-1 rounded-md hover:bg-white dark:hover:bg-slate-700 cursor-pointer" title="Zoom out" aria-label="Zoom out">−</button>
+                    <button type="button" id="hrZoomInBtn" class="px-2.5 py-1 rounded-md hover:bg-white dark:hover:bg-slate-700 cursor-pointer" title="Zoom in" aria-label="Zoom in">+</button>
+                    <button type="button" id="hrZoomResetBtn" class="px-2.5 py-1 rounded-md hover:bg-white dark:hover:bg-slate-700 cursor-pointer disabled:opacity-40 disabled:cursor-default" title="Show the whole workout" disabled>Reset</button>
                 </div>
             </div>
 
@@ -2460,6 +2477,31 @@
             }
         }
 
+        // Keep the Δ error strip showing the same x-range as the (possibly zoomed) heart-rate chart
+        function applyHrZoomToDeltaChart() {
+            const dc = state.deltaChart;
+            if (!dc || !dc.options?.scales?.x) return;
+            dc.options.scales.x.min = state.hrZoom ? state.hrZoom.min : undefined;
+            dc.options.scales.x.max = state.hrZoom ? state.hrZoom.max : undefined;
+            dc.update('none');
+        }
+
+        function updateHrZoomButtons() {
+            const reset = document.getElementById('hrZoomResetBtn');
+            if (reset) reset.disabled = !state.hrZoom;
+        }
+
+        function zoomHrChart(factor) {
+            const chart = state.hrChart;
+            if (!chart || typeof chart.zoom !== 'function') return;
+            chart.zoom({ x: factor });
+            const zoomed = chart.isZoomedOrPanned();
+            const key = state.xAxisMode + '|' + state.tracks.map(t => t.id).join(',');
+            state.hrZoom = zoomed ? { key, min: chart.scales.x.min, max: chart.scales.x.max } : null;
+            applyHrZoomToDeltaChart();
+            updateHrZoomButtons();
+        }
+
         function renderCharts() {
             // If the chart library failed to load (e.g. blocked), skip charts so the rest of the page still updates
             if (typeof Chart === 'undefined') return;
@@ -2511,6 +2553,18 @@
                 return new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             };
 
+            // Zoom: remember the visible range across redraws (theme, visibility toggles); reset when the
+            // x-axis type or the set of loaded tracks changes
+            const hrZoomKey = state.xAxisMode + '|' + state.tracks.map(t => t.id).join(',');
+            const savedHrZoom = state.hrZoom && state.hrZoom.key === hrZoomKey ? state.hrZoom : null;
+            const hrZoomMinRange = state.xAxisMode === 'elapsed' ? 30 : state.xAxisMode === 'distance' ? 0.05 : 30000;
+            const onHrZoomChange = ({ chart }) => {
+                const zoomed = typeof chart.isZoomedOrPanned === 'function' && chart.isZoomedOrPanned();
+                state.hrZoom = zoomed ? { key: hrZoomKey, min: chart.scales.x.min, max: chart.scales.x.max } : null;
+                applyHrZoomToDeltaChart();
+                updateHrZoomButtons();
+            };
+
             // 1. Primary Heart Rate Chart
             const hrCtx = document.getElementById('hrChartCanvas').getContext('2d');
             if (state.hrChart) state.hrChart.destroy();
@@ -2527,6 +2581,16 @@
                         intersect: false
                     },
                     plugins: {
+                        zoom: {
+                            limits: { x: { min: 'original', max: 'original', minRange: hrZoomMinRange } },
+                            pan: { enabled: true, mode: 'x', onPanComplete: onHrZoomChange },
+                            zoom: {
+                                wheel: { enabled: true, modifierKey: 'ctrl' },
+                                pinch: { enabled: true },
+                                mode: 'x',
+                                onZoomComplete: onHrZoomChange
+                            }
+                        },
                         legend: {
                             position: 'top',
                             labels: {
@@ -2655,6 +2719,15 @@
 
             // 3. Elevation Profile Chart
             const elevCtx = document.getElementById('elevationChartCanvas').getContext('2d');
+            if (savedHrZoom && typeof state.hrChart.zoomScale === 'function') {
+                state.hrChart.zoomScale('x', { min: savedHrZoom.min, max: savedHrZoom.max }, 'none');
+                state.hrZoom = savedHrZoom;
+            } else {
+                state.hrZoom = null;
+            }
+            applyHrZoomToDeltaChart();
+            updateHrZoomButtons();
+
             if (state.elevChart) state.elevChart.destroy();
 
             const elevDatasets = visibleTracks.map(trk => {
@@ -5228,6 +5301,15 @@
                     updateAllVisuals();
                 });
             }
+
+            document.getElementById('hrZoomInBtn')?.addEventListener('click', () => zoomHrChart(1.5));
+            document.getElementById('hrZoomOutBtn')?.addEventListener('click', () => zoomHrChart(1 / 1.5));
+            document.getElementById('hrZoomResetBtn')?.addEventListener('click', () => {
+                if (state.hrChart && typeof state.hrChart.resetZoom === 'function') state.hrChart.resetZoom('none');
+                state.hrZoom = null;
+                applyHrZoomToDeltaChart();
+                updateHrZoomButtons();
+            });
 
             const globalResetSyncBtn = document.getElementById('globalResetSyncBtn');
             if (globalResetSyncBtn) {

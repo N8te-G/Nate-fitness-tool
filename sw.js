@@ -4,10 +4,10 @@
 //   Saved copies are only used when offline.
 // - Web fonts are cache-first (they never change).
 // - Map tiles and anything else are left to the network.
-const CACHE = 'nft-v12';
+const CACHE = 'nft-v13';
 
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './icon.svg',
-    './vendor/tailwind.css', './vendor/chart.umd.min.js',
+    './vendor/tailwind.css', './vendor/chart.umd.min.js', './vendor/hammer.min.js', './vendor/chartjs-plugin-zoom.min.js',
     './vendor/leaflet/leaflet.css', './vendor/leaflet/leaflet.js',
     './vendor/leaflet/images/layers.png', './vendor/leaflet/images/layers-2x.png', './vendor/leaflet/images/marker-icon.png'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
