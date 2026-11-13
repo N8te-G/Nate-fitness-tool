@@ -103,9 +103,25 @@
     <header class="sticky top-0 z-40 backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white shadow-lg shadow-rose-500/25 shrink-0">
-                    <i data-lucide="activity" class="w-6 h-6"></i>
-                </div>
+                <!-- App logo (same design as icon.svg, inlined so it works without extra files) -->
+                <svg class="w-10 h-10 rounded-xl shadow-lg shadow-rose-500/25 shrink-0" viewBox="0 0 512 512" role="img" aria-label="Nate's Fitness Tool logo">
+                    <defs>
+                        <linearGradient id="hdrLogoBg" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#FF9A5B"/><stop offset="0.5" stop-color="#F43F5E"/><stop offset="1" stop-color="#7C3AED"/>
+                        </linearGradient>
+                        <radialGradient id="hdrLogoHl" cx="0.22" cy="0.12" r="0.75">
+                            <stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+                    <rect width="512" height="512" fill="url(#hdrLogoBg)"/>
+                    <rect width="512" height="512" fill="url(#hdrLogoHl)"/>
+                    <g fill="none" stroke-width="30" stroke-linecap="round">
+                        <path d="M112 316 C 166 316, 186 226, 240 226 S 302 352, 352 318 S 386 240, 400 236" stroke="#1E1B4B"/>
+                        <path d="M112 262 C 166 262, 182 168, 236 168 S 300 300, 350 262 S 384 182, 400 176" stroke="#FFFFFF"/>
+                    </g>
+                    <circle cx="400" cy="236" r="15" fill="#1E1B4B"/>
+                    <circle cx="400" cy="176" r="19" fill="#FFFFFF"/>
+                </svg>
                 <div class="min-w-0">
                     <h1 class="font-bold text-base sm:text-lg tracking-tight leading-none flex items-center gap-2 truncate">
                         <span>Nate's Fitness Tool</span>
