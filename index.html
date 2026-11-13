@@ -153,14 +153,15 @@
                         <radialGradient id="hdrLogoHl" cx="0.22" cy="0.12" r="0.75">
                             <stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
                         </radialGradient>
-                        <clipPath id="hdrLogoL"><polygon points="0,0 318,0 196,512 0,512"/></clipPath>
-                        <clipPath id="hdrLogoR"><polygon points="318,0 512,0 512,512 196,512"/></clipPath>
-                        <path id="hdrLogoHeart" transform="translate(88 102) scale(14)" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/>
+                        <clipPath id="hdrLogoL"><polygon points="0,0 300,0 190,512 0,512"/></clipPath>
+                        <clipPath id="hdrLogoR"><polygon points="300,0 512,0 512,512 190,512"/></clipPath>
+                        <path id="hdrLogoHeart" fill="none" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/>
                     </defs>
                     <rect width="512" height="512" fill="url(#hdrLogoBg)"/>
                     <rect width="512" height="512" fill="url(#hdrLogoHl)"/>
-                    <use href="#hdrLogoHeart" stroke="#1E1B4B" clip-path="url(#hdrLogoR)"/>
-                    <use href="#hdrLogoHeart" stroke="#FFFFFF" clip-path="url(#hdrLogoL)"/>
+                    <use href="#hdrLogoHeart" transform="translate(118.8 124.5) scale(12.6)" stroke="#FFFFFF" stroke-opacity="0.4"/>
+                    <g clip-path="url(#hdrLogoR)"><use href="#hdrLogoHeart" transform="translate(92.8 92.5) scale(12.6)" stroke="#1E1B4B"/></g>
+                    <g clip-path="url(#hdrLogoL)"><use href="#hdrLogoHeart" transform="translate(92.8 92.5) scale(12.6)" stroke="#FFFFFF"/></g>
                 </svg>
                 <div class="min-w-0">
                     <h1 class="font-bold text-base sm:text-lg tracking-tight leading-none flex items-center gap-2 truncate">
@@ -913,28 +914,32 @@
             ctx.fillStyle = hl;
             ctx.fillRect(0, 0, 512, 512);
 
-            // Two-tone heart handshake (Lucide heart-handshake, ISC), split diagonally white / midnight
+            // Two-tone heart handshake (Lucide heart-handshake, ISC), split diagonally white / midnight,
+            // with an offset translucent "ghost" heart behind it for the second device's reading
             const heart = new Path2D('M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762');
-            const drawHalf = (points, color) => {
+            const strokeHeart = (tx, ty, color, clipPoints) => {
                 ctx.save();
-                ctx.beginPath();
-                points.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
-                ctx.closePath();
-                ctx.clip();
-                ctx.translate(88, 102);
-                ctx.scale(14, 14);
-                ctx.lineWidth = 2.3;
+                if (clipPoints) {
+                    ctx.beginPath();
+                    clipPoints.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+                    ctx.closePath();
+                    ctx.clip();
+                }
+                ctx.translate(tx, ty);
+                ctx.scale(12.6, 12.6);
+                ctx.lineWidth = 2.4;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = color;
                 ctx.stroke(heart);
                 ctx.restore();
             };
+            strokeHeart(118.8, 124.5, 'rgba(255, 255, 255, 0.38)');
             ctx.shadowColor = 'rgba(59, 7, 100, 0.3)';
             ctx.shadowBlur = 18 * size / 512;
             ctx.shadowOffsetY = 8 * size / 512;
-            drawHalf([[318, 0], [512, 0], [512, 512], [196, 512]], '#1E1B4B');
-            drawHalf([[0, 0], [318, 0], [196, 512], [0, 512]], '#FFFFFF');
+            strokeHeart(92.8, 92.5, '#1E1B4B', [[300, 0], [512, 0], [512, 512], [190, 512]]);
+            strokeHeart(92.8, 92.5, '#FFFFFF', [[0, 0], [300, 0], [190, 512], [0, 512]]);
             ctx.shadowColor = 'transparent';
             ctx.restore();
         }
