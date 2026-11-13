@@ -705,7 +705,7 @@
                     </div>
                     <div class="min-w-0">
                         <h3 class="text-sm sm:text-base font-bold">Export High-Resolution Heart Rate Report (PNG)</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">2400 × 1500 px ultra-crisp chart with full data density, device legend & match statistics</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Up to 4800 × 3000 px ultra-crisp chart with full data density, device legend & match statistics</p>
                     </div>
                 </div>
                 <button id="closeExportModalBtn" class="shrink-0 -mt-1 -mr-1 sm:mt-0 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
@@ -737,6 +737,16 @@
                         <select id="exportThemeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none">
                             <option value="dark">Dark Studio Theme</option>
                             <option value="light">Clean White Paper Theme</option>
+                        </select>
+                    </div>
+
+                    <!-- Export Resolution -->
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Resolution:</span>
+                        <select id="exportResolutionSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none cursor-pointer">
+                            <option value="2" selected>Maximum (2×)</option>
+                            <option value="1.5">High (1.5×)</option>
+                            <option value="1">Standard (1×)</option>
                         </select>
                     </div>
 
@@ -779,7 +789,7 @@
                     </div>
                     <div class="min-w-0">
                         <h3 class="text-sm sm:text-base font-bold">Export High-Resolution GPS Track & Dropout Report (PNG)</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">2400 × 1780 px vector & tile map report with 4 zoomed max-drift hotspot boxes, dropout locations & offset curve</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Up to 4750 × 3525 px vector & tile map report with 4 zoomed max-drift hotspot boxes, dropout locations & offset curve</p>
                     </div>
                 </div>
                 <button id="closeGpsExportModalBtn" class="shrink-0 -mt-1 -mr-1 sm:mt-0 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
@@ -821,6 +831,16 @@
                         <select id="gpsExportThemeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none cursor-pointer">
                             <option value="dark">Dark Radar Studio Theme</option>
                             <option value="light">Clean White Paper Theme</option>
+                        </select>
+                    </div>
+
+                    <!-- Export Resolution -->
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Resolution:</span>
+                        <select id="gpsExportResolutionSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium focus:outline-none cursor-pointer">
+                            <option value="2" selected>Maximum (2×)</option>
+                            <option value="1.5">High (1.5×)</option>
+                            <option value="1">Standard (1×)</option>
                         </select>
                     </div>
 
@@ -3065,14 +3085,26 @@
             return str.slice(0, low).trimEnd() + ellipsis;
         }
 
+        // Export resolution: reports are laid out at their base size and drawn at base × scale.
+        // Capped at ~16.7 MP so exports also work on iPhones/iPads (Safari's canvas size limit).
+        function getExportScale(selectId, baseW, baseH) {
+            const wanted = parseFloat(document.getElementById(selectId)?.value) || 1;
+            const maxScale = Math.sqrt(16777216 / (baseW * baseH));
+            return Math.max(1, Math.min(wanted, maxScale));
+        }
+
         function renderHrExportReportCanvas() {
             const canvas = document.getElementById('exportPreviewCanvas');
             if (!canvas) return;
-            if (canvas.width !== 2400) canvas.width = 2400;
-            if (canvas.height !== 1500) canvas.height = 1500;
+            const W = 2400; // layout width
+            const H = 1500; // layout height
+            const exportScale = getExportScale('exportResolutionSelect', W, H);
+            const pxW = Math.round(W * exportScale);
+            const pxH = Math.round(H * exportScale);
+            if (canvas.width !== pxW) canvas.width = pxW;
+            if (canvas.height !== pxH) canvas.height = pxH;
             const ctx = canvas.getContext('2d');
-            const W = canvas.width;  // 2400
-            const H = canvas.height; // 1500
+            ctx.setTransform(exportScale, 0, 0, exportScale, 0, 0);
 
             ensureValidCompareSelection();
             const theme = document.getElementById('exportThemeSelect')?.value || 'dark';
@@ -3843,11 +3875,17 @@
             const renderToken = ++currentGpsRenderToken;
             const canvas = document.getElementById('gpsExportPreviewCanvas');
             if (!canvas) return;
-            if (canvas.width !== 2400) canvas.width = 2400;
-            if (canvas.height !== 1780) canvas.height = 1780;
+            const W = 2400; // layout width
+            const H = 1780; // layout height
+            const exportScale = getExportScale('gpsExportResolutionSelect', W, H);
+            const pxW = Math.round(W * exportScale);
+            const pxH = Math.round(H * exportScale);
+            if (canvas.width !== pxW) canvas.width = pxW;
+            if (canvas.height !== pxH) canvas.height = pxH;
             const ctx = canvas.getContext('2d');
-            const W = canvas.width;  // 2400
-            const H = canvas.height; // 1780
+            ctx.setTransform(exportScale, 0, 0, exportScale, 0, 0);
+            // At higher resolutions, fetch map tiles one zoom level deeper so the map is genuinely sharper
+            const tileDetail = exportScale >= 1.5 ? 1 : 0;
 
             ensureValidCompareSelection();
             const theme = document.getElementById('gpsExportThemeSelect')?.value || 'dark';
@@ -4018,7 +4056,8 @@
                 }
                 if (bgType === 'osm' || bgType === 'osm_classic' || bgType === 'satellite') {
                     if (statusEl) statusEl.classList.remove('hidden');
-                    const scaledTileSize = 256 * fitZoomMultiplier;
+                    const tileZoom = Math.min(19, zoom + tileDetail);
+                    const scaledTileSize = (256 * fitZoomMultiplier) / Math.pow(2, tileZoom - zoom);
                     const leftWorldX = centerWorldX - mapCardW / 2;
                     const rightWorldX = centerWorldX + mapCardW / 2;
                     const topWorldY = centerWorldY - mapCardH / 2;
@@ -4033,7 +4072,7 @@
                     for (let tx = minTileX; tx <= maxTileX; tx++) {
                         for (let ty = minTileY; ty <= maxTileY; ty++) {
                             mainTilePromises.push(
-                                fetchMapTileImage(bgType, zoom, tx, ty).then(img => ({
+                                fetchMapTileImage(bgType, tileZoom, tx, ty).then(img => ({
                                     img,
                                     tx,
                                     ty,
@@ -4046,7 +4085,8 @@
                     // Also fetch high-zoom tiles for each of the 4 Hotspot Sub-Maps in parallel
                     const hsPromises = hotspotConfigs.map((cfg, idx) => {
                         if (!showZoomBoxes || !cfg.hs) return Promise.resolve([]);
-                        const hsTileSize = 256 * cfg.hsMult;
+                        const hsTileZoom = Math.min(19, cfg.hsZoom + tileDetail);
+                        const hsTileSize = (256 * cfg.hsMult) / Math.pow(2, hsTileZoom - cfg.hsZoom);
                         const lWX = cfg.hsCenterWX - cfg.subBoxW / 2;
                         const rWX = cfg.hsCenterWX + cfg.subBoxW / 2;
                         const tWY = cfg.hsCenterWY - cfg.subBoxH / 2;
@@ -4061,7 +4101,7 @@
                         for (let tx = minTX; tx <= maxTX; tx++) {
                             for (let ty = minTY; ty <= maxTY; ty++) {
                                 subList.push(
-                                    fetchMapTileImage(bgType, cfg.hsZoom, tx, ty).then(img => ({
+                                    fetchMapTileImage(bgType, hsTileZoom, tx, ty).then(img => ({
                                         img,
                                         tx,
                                         ty,
@@ -5389,7 +5429,7 @@
                     downloadExportedPNG();
                 });
             }
-            ['exportTitleInput', 'exportCompareModeSelect', 'exportThemeSelect', 'exportDensitySelect', 'exportIncludeDelta'].forEach(id => {
+            ['exportTitleInput', 'exportCompareModeSelect', 'exportThemeSelect', 'exportResolutionSelect', 'exportDensitySelect', 'exportIncludeDelta'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('input', () => renderHrExportReportCanvas());
@@ -5430,6 +5470,7 @@
                 'gpsExportCompareModeSelect',
                 'gpsExportBgTypeSelect',
                 'gpsExportThemeSelect',
+                'gpsExportResolutionSelect',
                 'gpsExportShowDropouts',
                 'gpsExportShowSplits',
                 'gpsExportShowOffsetChart',
@@ -5456,7 +5497,9 @@
             [
                 ['gpsExportBgTypeSelect', 'gpsExportMapLayer'],
                 ['gpsExportThemeSelect', 'gpsExportTheme'],
-                ['exportThemeSelect', 'hrExportTheme']
+                ['exportThemeSelect', 'hrExportTheme'],
+                ['exportResolutionSelect', 'hrExportResolution'],
+                ['gpsExportResolutionSelect', 'gpsExportResolution']
             ].forEach(([id, key]) => {
                 const sel = document.getElementById(id);
                 if (!sel) return;
