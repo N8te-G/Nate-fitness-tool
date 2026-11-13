@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=09d51e0bf5">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=ae180d34ad">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -266,38 +266,52 @@
                 </div>
 
                 <!-- ALWAYS-VISIBLE GLOBAL TIME SYNC & AUTO-ALIGNMENT BAR -->
-                <div id="globalSyncToolbar" class="p-3 sm:p-3.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div class="flex items-center gap-2.5 min-w-0">
+                <div id="globalSyncToolbar" class="p-3 sm:p-4 rounded-xl bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-3">
+                    <div class="flex items-start gap-2.5 min-w-0">
                         <div class="w-8 h-8 rounded-lg bg-orange-400/15 text-orange-600 dark:text-orange-300 flex items-center justify-center shrink-0 border border-orange-400/25">
                             <i data-lucide="satellite" class="w-4 h-4"></i>
                         </div>
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100">Time Sync & Auto-Alignment</span>
+                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100">Time Sync &amp; Alignment</span>
                                 <span id="syncStatusPill" class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">
                                     Auto-Sync Ready (GPS UTC Clock)
                                 </span>
                             </div>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                Aligns devices started at different times using satellite UTC timestamps &amp; sensor cross-correlation
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                Lines up devices that started recording at different times.
                             </p>
                         </div>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-2 shrink-0">
-                        <button type="button" id="globalGpsSyncBtn" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-[#FF9A5B] to-[#F43F5E] hover:brightness-110 text-white shadow-sm shadow-rose-500/20 transition-all cursor-pointer" title="Align all tracks to the Reference device's exact GPS UTC start timestamp">
-                            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-                            <span>Auto-Sync by GPS Clock</span>
-                        </button>
-                        <button type="button" id="globalBestFitSyncBtn" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-[#F43F5E] to-[#7C3AED] hover:brightness-110 text-white shadow-sm shadow-violet-500/20 transition-all cursor-pointer" title="Cross-correlate HR & GPS around the clock sync point (±60s) to remove internal sensor buffer lag">
-                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-                            <span>Best-Fit HR/GPS Lag (±60s)</span>
-                        </button>
-                        <button type="button" id="globalResetSyncBtn" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 transition-all cursor-pointer" title="Reset all track offsets back to 0s relative elapsed time">
-                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-                            <span>Reset All to 0s</span>
-                        </button>
+                    <!-- Primary: GPS clock (recommended), with its own explanation -->
+                    <div class="flex flex-col gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/50 border border-rose-500/30">
+                        <button type="button" id="globalGpsSyncBtn" class="w-full flex flex-col items-center justify-center gap-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF9A5B] via-[#F43F5E] to-[#7C3AED] hover:brightness-110 text-white shadow-md shadow-rose-500/25 transition-all cursor-pointer" title="Align all tracks to the Reference device's exact GPS UTC start time">
+                        <span class="inline-flex items-center gap-2 text-sm font-semibold"><i data-lucide="clock" class="w-4 h-4"></i>Sync by GPS Clock</span>
+                        <span class="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold uppercase tracking-wide">★ Recommended · Most accurate</span>
+                    </button>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-300 px-0.5">Lines tracks up by satellite (GPS UTC) time. This keeps each device's real timing, so it's the most accurate way to compare devices.</p>
                     </div>
+
+                    <!-- Lag-corrected notice (shown only while Best-Fit alignment is active) -->
+                    <div id="lagCorrectionNotice" class="hidden flex items-start gap-2 p-2.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-[11px] text-violet-700 dark:text-violet-200">
+                        <i data-lucide="info" class="w-4 h-4 shrink-0 mt-px"></i>
+                        <span>Scores currently include lag correction, so devices may look more accurate than they really are.
+                            <button type="button" id="lagNoticeUseGpsBtn" class="font-semibold underline underline-offset-2 hover:text-violet-900 dark:hover:text-white cursor-pointer">Switch back to GPS clock</button></span>
+                    </div>
+
+                    <!-- Secondary: lag finder (optional) -->
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 pt-1 border-t border-slate-200 dark:border-slate-700/70">
+                        <button type="button" id="globalBestFitSyncBtn" class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-transparent hover:bg-violet-500/10 text-violet-600 dark:text-violet-300 border border-violet-500/40 transition-all cursor-pointer shrink-0" title="Shift each track (±60s) to where it best matches the Reference, to show each device's sensor lag">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            <span>Find Sensor Lag (±60s)</span>
+                        </button>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">Optional: shows how far each device's heart rate lags the reference. Not recommended for accuracy scores.</p>
+                    </div>
+                    <button type="button" id="globalResetSyncBtn" class="self-start inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 underline-offset-2 hover:underline cursor-pointer" title="Reset all track offsets back to 0s relative elapsed time">
+                        <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                        <span>Reset offsets to 0s</span>
+                    </button>
                 </div>
 
                 <!-- File List Container -->
@@ -1106,6 +1120,8 @@
         function updateSyncStatusPillUI() {
             const pill = document.getElementById('syncStatusPill');
             if (!pill) return;
+            const lagNotice = document.getElementById('lagCorrectionNotice');
+            if (lagNotice) lagNotice.classList.toggle('hidden', !(state.tracks.length >= 2 && state.syncStateMode === 'bestfit'));
 
             if (state.tracks.length < 2) {
                 pill.textContent = 'Auto-Sync Ready (GPS UTC Clock)';
@@ -1117,7 +1133,7 @@
                 pill.textContent = '✓ Auto-Synced to GPS UTC Clock';
                 pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30';
             } else if (state.syncStateMode === 'bestfit') {
-                pill.textContent = '✦ Best-Fit HR/GPS Lag Aligned';
+                pill.textContent = '✦ Lag-corrected (Find Sensor Lag)';
                 pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30';
             } else if (state.syncStateMode === 'reset') {
                 pill.textContent = '0s Relative Elapsed Time';
@@ -1180,12 +1196,11 @@
                 const sim = computePairSimilarity(refTrack, chalTrack);
                 if (!sim) continue;
 
-                // Combine HR Match Score, Pearson correlation, and GPS spatial closeness
-                // with a gentle regularization toward the atomic GPS clock timestamp
+                // Score heart-rate agreement only: sensor lag is a heart-rate effect, and GPS positions
+                // (which have no sensor lag) would otherwise pull the result back to the clock offset.
+                // A tiny penalty keeps ties close to the GPS clock offset.
                 const hrScore = Number.isFinite(sim.matchScore) ? sim.matchScore : 0;
-                const gpsScore = Number.isFinite(sim.gpsMatchScore) ? sim.gpsMatchScore : hrScore;
-                const distPenalty = Math.abs(delta) * 0.08;
-                const composite = (hrScore * 0.65) + (gpsScore * 0.35) - distPenalty;
+                const composite = hrScore - Math.abs(delta) * 0.02;
 
                 if (composite > bestScore) {
                     bestScore = composite;
@@ -1223,7 +1238,7 @@
 
             state.syncStateMode = 'bestfit';
             updateAllVisuals();
-            showToast(`Best-Fit HR/GPS lag alignment complete vs. "${refTrack.name}"!`);
+            showToast(`Sensor lag found vs "${refTrack.name}". Scores now include lag correction; use Sync by GPS Clock for a fair comparison.`);
         }
         // Mark a specific loaded device as the known-good Master HR Reference device
         function setReferenceTrack(trackId) {
@@ -1998,9 +2013,11 @@
                     const sign = gpsClockDelta >= 0 ? '+' : '';
                     syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30">${sign}${gpsClockDelta}s GPS Auto-Sync</span>`;
                 } else if (trk.syncMethod === 'bestfit') {
-                    const lagDiff = offsetVal - gpsClockDelta;
-                    const lagSign = lagDiff >= 0 ? '+' : '';
-                    syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30">${offsetFormatted} Best-Fit (${lagSign}${lagDiff}s sensor lag)</span>`;
+                    // Positive = this device's heart rate arrives later than the reference's (typical optical sensor delay)
+                    const lagSec = gpsClockDelta - offsetVal;
+                    const refName = escapeHtml(state.tracks.find(t => t.id === state.referenceTrackId)?.name || 'reference');
+                    const lagText = lagSec === 0 ? `No HR lag vs ${refName}` : `HR ${Math.abs(lagSec)} s ${lagSec > 0 ? 'behind' : 'ahead of'} ${refName}`;
+                    syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30">${lagText}</span>`;
                 } else {
                     const gpsSign = gpsClockDelta >= 0 ? '+' : '';
                     syncMethodBadge = `<span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">${offsetFormatted} Manual (GPS Δ: ${gpsSign}${gpsClockDelta}s)</span>`;
@@ -2078,7 +2095,7 @@
                             <button type="button" data-id="${trk.id}" data-step="1" class="step-sync-btn px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer" title="Shift track +1 second">+1s</button>
                             <button type="button" data-id="${trk.id}" data-step="5" class="step-sync-btn px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer" title="Shift track +5 seconds">+5s</button>
                             <button type="button" data-id="${trk.id}" class="trk-gps-sync-btn px-2 py-1 rounded-lg text-[11px] font-semibold bg-orange-400/15 hover:bg-orange-400/25 text-orange-600 dark:text-orange-300 border border-orange-400/30 transition-colors cursor-pointer" title="Sync this track to Reference GPS UTC clock">GPS Sync</button>
-                            <button type="button" data-id="${trk.id}" class="trk-bestfit-btn px-2 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/15 hover:bg-violet-500/25 text-violet-600 dark:text-violet-300 border border-violet-500/30 transition-colors cursor-pointer" title="Best-fit cross-correlation lag vs Reference">Best Fit</button>
+                            <button type="button" data-id="${trk.id}" class="trk-bestfit-btn px-2 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/15 hover:bg-violet-500/25 text-violet-600 dark:text-violet-300 border border-violet-500/30 transition-colors cursor-pointer" title="Best-fit cross-correlation lag vs Reference">Find Lag</button>
                             <button type="button" data-id="${trk.id}" class="trk-zero-btn px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-rose-500/10 text-slate-500 hover:text-rose-500 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer" title="Reset this track offset to 0s">0s</button>
                         </div>
                     </div>
@@ -5270,6 +5287,7 @@
                 });
             }
 
+            document.getElementById('lagNoticeUseGpsBtn')?.addEventListener('click', () => document.getElementById('globalGpsSyncBtn')?.click());
             const globalBestFitSyncBtn = document.getElementById('globalBestFitSyncBtn');
             if (globalBestFitSyncBtn) {
                 globalBestFitSyncBtn.addEventListener('click', () => {
