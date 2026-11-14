@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=1fa5f5d47d">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=97bc03e656">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -306,18 +306,18 @@
                 <div id="globalSyncToolbar" class="p-3 sm:p-4 rounded-xl bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-3">
                     <div class="min-w-0">
                         <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                                <span class="text-sm font-bold text-slate-800 dark:text-slate-100">Time Sync &amp; Alignment</span>
-                                <span id="syncStatusPillWrap" class="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">
+                            <div class="flex items-center gap-3">
+                                <span class="min-w-0 text-sm font-bold leading-snug text-slate-800 dark:text-slate-100">Time Sync &amp; Alignment</span>
+                                <span id="syncStatusPillWrap" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2 py-1 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">
                                     <i data-lucide="satellite" class="w-3.5 h-3.5 shrink-0"></i>
-                                    <span id="syncStatusPill">Auto-Sync Ready (Clock)</span>
+                                    <span id="syncStatusPill">Auto-Sync Ready</span>
                                 </span>
-                                <!-- Only shown after offsets were changed by hand or reset -->
-                                <button type="button" id="globalGpsSyncBtn" class="hidden inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline underline-offset-2 cursor-pointer" title="Undo manual changes and line all tracks up by recording clock again">
-                                    <i data-lucide="clock" class="w-3 h-3"></i>
-                                    <span>Re-sync all by clock</span>
-                                </button>
                             </div>
+                            <!-- Only shown after offsets were changed by hand or reset -->
+                            <button type="button" id="globalGpsSyncBtn" class="hidden mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline underline-offset-2 cursor-pointer" title="Undo manual changes and line all tracks up by recording clock again">
+                                <i data-lucide="clock" class="w-3 h-3"></i>
+                                <span>Re-sync all by clock</span>
+                            </button>
                             <p id="syncDescription" class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                                 Tracks will be lined up automatically by the time each device recorded (satellite time on GPS watches, your phone's time on straps like the Polar H10), so you see each device's real timing.
                             </p>
@@ -1188,20 +1188,20 @@
             }
 
             if (state.tracks.length < 2) {
-                pill.textContent = 'Auto-Sync Ready (Clock)';
-                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30';
+                pill.textContent = 'Auto-Sync Ready';
+                pillWrap.className = 'shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2 py-1 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30';
                 return;
             }
 
             if (state.syncStateMode === 'gps') {
                 pill.textContent = 'Synced by Clock';
-                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30';
+                pillWrap.className = 'shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30';
             } else if (state.syncStateMode === 'reset') {
-                pill.textContent = '0s Relative Elapsed Time';
-                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30';
+                pill.textContent = 'Offsets at 0s';
+                pillWrap.className = 'shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2 py-1 rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30';
             } else {
-                pill.textContent = 'Manual / Custom Sync Offset';
-                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30';
+                pill.textContent = 'Manual Offsets';
+                pillWrap.className = 'shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30';
             }
         }
 
