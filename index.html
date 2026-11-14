@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=3075706f8f">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=fdb6c7ca40">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -3380,7 +3380,16 @@
             const canvas = document.getElementById('exportPreviewCanvas');
             if (!canvas) return;
             const W = 2400; // layout width
-            const H = 1500; // layout height
+            // Device cards wrap onto extra rows when there are too many to read in one row
+            const layoutTrackCount = Math.max(1, (state.tracks.some(t => t.visible) ? state.tracks.filter(t => t.visible) : state.tracks).length);
+            const layoutHasSection = document.getElementById('exportRangeSelect')?.value === 'zoom' && !!HR_NAV.win;
+            const legendCardGap = 16, legendCardH = 115, minLegendCardW = 380;
+            const legendCardsAvailW = (W - 120) - (layoutHasSection ? 640 + legendCardGap : 0);
+            const cardsPerRowMax = Math.max(1, Math.floor((legendCardsAvailW + legendCardGap) / (minLegendCardW + legendCardGap)));
+            const legendRows = Math.ceil(layoutTrackCount / cardsPerRowMax);
+            const cardsPerRow = Math.ceil(layoutTrackCount / legendRows);
+            const legendExtraH = (legendRows - 1) * (legendCardH + legendCardGap);
+            const H = 1500; // layout height (fixed; the chart gives up space when cards wrap)
             const exportScale = getExportScale('exportResolutionSelect', W, H);
             const pxW = Math.round(W * exportScale);
             const pxH = Math.round(H * exportScale);
@@ -3472,16 +3481,16 @@
             // 3. Device Legend & Per-Device Stats Row (y = 135..250)
             const legendTop = 135;
             const legendHeight = 115;
-            const numTracks = Math.max(1, activeTracks.length);
             const cardGap = 16;
             // Section exports reserve the right end of this row for an overview of where the section sits
             const overviewW = exportRange ? 640 : 0;
             const totalAvailW = W - 120 - (overviewW ? overviewW + cardGap : 0);
-            const trackCardW = Math.min(560, (totalAvailW - cardGap * (numTracks - 1)) / numTracks);
+            const trackCardW = Math.min(560, (totalAvailW - cardGap * (cardsPerRow - 1)) / cardsPerRow);
 
             activeTracks.forEach((trk, idx) => {
-                const cx = 60 + idx * (trackCardW + cardGap);
-                drawRoundedRect(ctx, cx, legendTop, trackCardW, legendHeight, 16);
+                const cx = 60 + (idx % cardsPerRow) * (trackCardW + cardGap);
+                const cardTop = legendTop + Math.floor(idx / cardsPerRow) * (legendHeight + cardGap);
+                drawRoundedRect(ctx, cx, cardTop, trackCardW, legendHeight, 16);
                 ctx.fillStyle = bgCard;
                 ctx.fill();
                 ctx.lineWidth = (trkA && trk.id === trkA.id) ? 3 : 2;
@@ -3489,7 +3498,7 @@
                 ctx.stroke();
 
                 // Left color accent bar
-                drawRoundedRect(ctx, cx + 14, legendTop + 20, 12, legendHeight - 40, 6);
+                drawRoundedRect(ctx, cx + 14, cardTop + 20, 12, legendHeight - 40, 6);
                 ctx.fillStyle = trk.color;
                 ctx.fill();
 
@@ -3498,7 +3507,7 @@
                 ctx.font = 'bold 20px Inter, system-ui, sans-serif';
                 const prefixTag = (trkA && trk.id === trkA.id) ? '★ HR REF: ' : '';
                 const dispName = fitTextWithEllipsis(ctx, prefixTag + trk.name, trackCardW - 52);
-                ctx.fillText(dispName, cx + 38, legendTop + 45);
+                ctx.fillText(dispName, cx + 38, cardTop + 45);
 
                 // Device stats line 1
                 ctx.fillStyle = textSub;
@@ -3509,7 +3518,7 @@
                     `Avg: ${sectionStats.get(trk.id).avgHR || '—'} bpm | Max: ${sectionStats.get(trk.id).maxHR || '—'} | Min: ${sectionStats.get(trk.id).minHR || '—'}`,
                     trackCardW - 52
                 );
-                ctx.fillText(statsLine1, cx + 38, legendTop + 74);
+                ctx.fillText(statsLine1, cx + 38, cardTop + 74);
 
                 // Device stats line 2
                 ctx.fillStyle = trk.color;
@@ -3519,7 +3528,7 @@
                     `${sectionStats.get(trk.id).pointCount.toLocaleString()} pts • ${formatDuration(sectionStats.get(trk.id).durationSec)} • ${(sectionStats.get(trk.id).distanceMeters / 1000).toFixed(2)} km${syncText}`,
                     trackCardW - 52
                 );
-                ctx.fillText(statsLine2, cx + 38, legendTop + 98);
+                ctx.fillText(statsLine2, cx + 38, cardTop + 98);
             });
 
             // Overview card: the whole workout in miniature with the exported section highlighted
@@ -3592,8 +3601,8 @@
             const footerExpandPx = extraFooterRows > 0 ? Math.min(120, extraFooterRows * 36) : 0;
 
             // 4. Main High-Density Heart Rate Chart Area
-            const chartCardTop = 268;
-            const chartCardHeight = 930 - footerExpandPx;
+            const chartCardTop = 268 + legendExtraH;
+            const chartCardHeight = 930 - footerExpandPx - legendExtraH;
             drawRoundedRect(ctx, 60, chartCardTop, W - 120, chartCardHeight, 20);
             ctx.fillStyle = bgCard;
             ctx.fill();
