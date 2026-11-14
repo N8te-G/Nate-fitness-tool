@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=97bc03e656">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=8a9a8a64fc">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -382,6 +382,7 @@
                     </div>
                     <div id="metricMatchScore" class="text-2xl font-bold font-mono mt-1 text-emerald-500">—</div>
                     <div id="metricVerdict" class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Need 2+ tracks</div>
+                    <div id="metricScoreParts" class="text-[10px] font-mono text-slate-400 dark:text-slate-500 mt-0.5"></div>
                 </div>
 
                 <!-- Pearson Correlation -->
@@ -1932,21 +1933,26 @@
 
             const pairs = [];
             const clockBase = clockAxisBaseMs();
+            // Coverage: of the reference readings taken while Track B was recording, how many B had a reading for
+            // (B's dropouts longer than HR_PAIR_MAX_GAP_SEC count as missing; a later start / earlier stop does not)
+            let coverageCandidates = 0;
+            const bStart = bTimes[0], bEnd = bTimes[bTimes.length - 1];
             for (const pA of ptsA) {
                 const tA = pA.elapsedSec + offsetA;
+                if (tA < bStart || tA > bEnd) continue;
                 const hrB = interpolateB(tA);
-                if (hrB != null) {
-                    const pr = {
-                        t: tA,
-                        ts: clockBase + tA * 1000,
-                        distKm: +(pA.distMeters / 1000).toFixed(2),
-                        hrA: pA.hr,
-                        hrB: hrB,
-                        diff: hrB - pA.hr,
-                        absDiff: Math.abs(hrB - pA.hr)
-                    };
-                    if (!xRange || (pairX(pr) >= xRange.min && pairX(pr) <= xRange.max)) pairs.push(pr);
-                }
+                const pr = {
+                    t: tA,
+                    ts: clockBase + tA * 1000,
+                    distKm: +(pA.distMeters / 1000).toFixed(2),
+                    hrA: pA.hr,
+                    hrB: hrB,
+                    diff: hrB != null ? hrB - pA.hr : null,
+                    absDiff: hrB != null ? Math.abs(hrB - pA.hr) : null
+                };
+                if (xRange && !(pairX(pr) >= xRange.min && pairX(pr) <= xRange.max)) continue;
+                coverageCandidates++;
+                if (hrB != null) pairs.push(pr);
             }
 
             if (pairs.length < 3) return null;
@@ -1988,13 +1994,20 @@
             // Composite Match Score (0 - 100%)
             const maePenalty = Math.max(0, 100 - mae * 4.5);
             const corrScore = Math.max(0, r) * 100;
-            const matchScore = Math.min(100, Math.max(0, (maePenalty * 0.65 + corrScore * 0.35)));
+            // Accuracy: how closely B agrees while it has a reading
+            const accuracyScore = Math.min(100, Math.max(0, (maePenalty * 0.65 + corrScore * 0.35)));
+            // Coverage: share of the shared recording time B actually had a heart-rate reading
+            const coveragePct = coverageCandidates > 0 ? Math.min(100, (n / coverageCandidates) * 100) : 100;
+            // Overall match = accuracy x coverage (a dropout second scores zero)
+            const matchScore = accuracyScore * coveragePct / 100;
 
             // Time-Synchronized Pairwise GPS Spatial Comparison & Altitude Deviation via computePairwiseGpsStats
             const gpsStats = computePairwiseGpsStats(trackA, trackB);
 
             return {
                 matchScore: +matchScore.toFixed(1),
+                accuracyScore: +accuracyScore.toFixed(1),
+                coveragePct: +coveragePct.toFixed(1),
                 correlation: +r.toFixed(3),
                 mae: +mae.toFixed(2),
                 rmse: +rmse.toFixed(2),
@@ -2005,6 +2018,30 @@
                 pairs,
                 ...(gpsStats || {})
             };
+        }
+
+        // "Accuracy 90.4% · Coverage 88.9%" breakdown of the overall match score (null for GPS-only comparisons)
+        function scorePartsText(sim) {
+            if (!sim || sim.coveragePct == null) return '';
+            const lost = dropoutPointsLost(sim);
+            return lost > 0
+                ? `Accuracy ${sim.accuracyScore}% · Dropouts −${lost} pts (${sim.coveragePct}% coverage)`
+                : `Accuracy ${sim.accuracyScore}% · No dropouts`;
+        }
+        // Percentage points of the overall score lost because the device had no reading
+        function dropoutPointsLost(sim) {
+            if (!sim || sim.coveragePct == null) return 0;
+            return +Math.max(0, sim.accuracyScore - sim.matchScore).toFixed(1);
+        }
+        // Short form for table cells: "−13.0 pts dropouts" or "no dropouts"
+        function dropoutShortText(sim) {
+            if (!sim || sim.coveragePct == null) return '';
+            const lost = dropoutPointsLost(sim);
+            return lost > 0 ? `−${lost} pts dropouts` : 'no dropouts';
+        }
+        // Dropouts are called out in the verdict when the device missed more than 5% of the time
+        function hrHasDropouts(sim) {
+            return !!sim && sim.coveragePct != null && sim.coveragePct < 95;
         }
 
         // Compute Reference-vs-All comparisons for a given Master Reference Track (HR or GPS)
@@ -2403,6 +2440,8 @@
 
             const elMatch = document.getElementById('metricMatchScore');
             const elVerdict = document.getElementById('metricVerdict');
+            const elScoreParts = document.getElementById('metricScoreParts');
+            if (elScoreParts) elScoreParts.textContent = '';
             const elCorr = document.getElementById('metricCorrelation');
             const elMAE = document.getElementById('metricMAE');
             const elRMSE = document.getElementById('metricRMSE');
@@ -2457,6 +2496,15 @@
                 // Compute mean aggregate metrics across all challenger tracks for top HR KPI cards
                 const nChal = Math.max(1, refComparisons.length);
                 const avgMatch = +(refComparisons.reduce((s, c) => s + c.sim.matchScore, 0) / nChal).toFixed(1);
+                const hrParts = refComparisons.filter(c => c.sim.coveragePct != null);
+                if (elScoreParts && hrParts.length) {
+                    const avgAcc = +(hrParts.reduce((s, c) => s + c.sim.accuracyScore, 0) / hrParts.length).toFixed(1);
+                    const avgCov = +(hrParts.reduce((s, c) => s + c.sim.coveragePct, 0) / hrParts.length).toFixed(1);
+                    const avgLost = +(hrParts.reduce((s, c) => s + dropoutPointsLost(c.sim), 0) / hrParts.length).toFixed(1);
+                    elScoreParts.textContent = avgLost > 0
+                        ? `Avg accuracy ${avgAcc}% · Dropouts −${avgLost} pts (${avgCov}% coverage)`
+                        : `Avg accuracy ${avgAcc}% · No dropouts`;
+                }
                 const avgCorr = +(refComparisons.reduce((s, c) => s + c.sim.correlation, 0) / nChal).toFixed(3);
                 const avgMAE = +(refComparisons.reduce((s, c) => s + c.sim.mae, 0) / nChal).toFixed(2);
                 const avgRMSE = +(refComparisons.reduce((s, c) => s + c.sim.rmse, 0) / nChal).toFixed(2);
@@ -2482,7 +2530,7 @@
                 const sortedHr = [...refComparisons].sort((a, b) => b.sim.matchScore - a.sim.matchScore);
                 hrRefBody.innerHTML = sortedHr.map(({ challenger, sim }) => {
                     const scoreCls = sim.matchScore >= 92 ? 'text-emerald-500' : sim.matchScore >= 80 ? 'text-amber-500' : 'text-rose-500';
-                    const verdictLabel = sim.matchScore >= 92 ? 'Excellent Lock' : sim.matchScore >= 80 ? 'Good Match' : 'Divergence';
+                    const verdictLabel = (sim.matchScore >= 92 ? 'Excellent Lock' : sim.matchScore >= 80 ? 'Good Match' : 'Divergence') + (hrHasDropouts(sim) ? ' · HR dropouts' : '');
                     const avgDiff = (challenger.stats.avgHR && trkA.stats.avgHR) ? (challenger.stats.avgHR - trkA.stats.avgHR) : null;
                     const avgDiffStr = avgDiff != null ? `(${avgDiff >= 0 ? '+' : ''}${avgDiff})` : '';
                     return `
@@ -2491,7 +2539,7 @@
                                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${challenger.color}"></span>
                                 <span class="truncate max-w-[200px]">${escapeHtml(challenger.name)}</span>
                             </td>
-                            <td class="py-2.5 px-3 font-bold ${scoreCls}">${sim.matchScore}%</td>
+                            <td class="py-2.5 px-3 font-bold ${scoreCls}">${sim.matchScore}%${sim.coveragePct != null ? `<div class="text-[10px] font-normal text-slate-400 whitespace-nowrap" title="Accuracy ${sim.accuracyScore}% · Coverage ${sim.coveragePct}%">${dropoutShortText(sim)}</div>` : ''}</td>
                             <td class="py-2.5 px-3">${sim.correlation.toFixed(3)}</td>
                             <td class="py-2.5 px-3">±${sim.mae} <span class="text-slate-400 text-[10px]">(RMSE ${sim.rmse})</span></td>
                             <td class="py-2.5 px-3 text-sky-400">${sim.within2Pct}% <span class="text-slate-400">/ ${sim.within5Pct}%</span></td>
@@ -2586,14 +2634,15 @@
                 elVerdict.textContent = 'No overlapping HR data';
             } else {
                 elMatch.textContent = `${sim.matchScore}%`;
+                if (elScoreParts) elScoreParts.textContent = scorePartsText(sim);
                 if (sim.matchScore >= 92) {
                     elVerdict.textContent = 'Excellent sensor agreement';
                     elMatch.className = 'text-2xl font-bold font-mono mt-1 text-emerald-500';
                 } else if (sim.matchScore >= 80) {
-                    elVerdict.textContent = 'Good match with minor lag';
+                    elVerdict.textContent = hrHasDropouts(sim) ? 'Good match, but HR dropouts' : 'Good match with minor lag';
                     elMatch.className = 'text-2xl font-bold font-mono mt-1 text-amber-500';
                 } else {
-                    elVerdict.textContent = 'Noticeable sensor divergence';
+                    elVerdict.textContent = hrHasDropouts(sim) ? 'Divergence & HR dropouts' : 'Noticeable sensor divergence';
                     elMatch.className = 'text-2xl font-bold font-mono mt-1 text-rose-500';
                 }
 
@@ -3953,8 +4002,8 @@
 
                 // Table Columns
                 const cols = [
-                    { label: 'CHALLENGER DEVICE', x: 92, w: 460 },
-                    { label: 'OVERALL MATCH', x: 565, w: 185 },
+                    { label: 'CHALLENGER DEVICE', x: 92, w: 400 },
+                    { label: 'OVERALL MATCH', x: 505, w: 245 },
                     { label: 'PEARSON r', x: 765, w: 170 },
                     { label: 'MAE / RMSE', x: 950, w: 265 },
                     { label: 'WITHIN ±2 / ±5 BPM', x: 1230, w: 250 },
@@ -3992,10 +4041,16 @@
 
                     // Match %
                     const mColor = sim.matchScore >= 92 ? '#10b981' : sim.matchScore >= 80 ? '#f59e0b' : '#f43f5e';
-                    const vLabel = sim.matchScore >= 92 ? 'EXCELLENT LOCK' : sim.matchScore >= 80 ? 'MINOR LAG' : 'DIVERGENCE';
+                    const vLabel = hrHasDropouts(sim) ? (sim.matchScore >= 80 ? 'GOOD · DROPOUTS' : 'DROPOUTS') : sim.matchScore >= 92 ? 'EXCELLENT LOCK' : sim.matchScore >= 80 ? 'MINOR LAG' : 'DIVERGENCE';
                     ctx.fillStyle = mColor;
                     ctx.font = 'bold 16px JetBrains Mono, monospace';
                     ctx.fillText(`${sim.matchScore}%`, cols[1].x, textY);
+                    if (sim.coveragePct != null) {
+                        const scoreW = ctx.measureText(`${sim.matchScore}%`).width;
+                        ctx.fillStyle = textSub;
+                        ctx.font = '500 12px JetBrains Mono, monospace';
+                        ctx.fillText(fitTextWithEllipsis(ctx, dropoutShortText(sim), cols[1].w - scoreW - 10), cols[1].x + scoreW + 8, textY);
+                    }
 
                     // Pearson r
                     ctx.fillStyle = '#6366f1';
@@ -4045,10 +4100,12 @@
                 const verdictText = sim.matchScore >= 92
                     ? 'EXCELLENT SENSOR AGREEMENT'
                     : sim.matchScore >= 80
-                    ? 'GOOD AGREEMENT WITH MINOR RESPONSE LAG'
-                    : 'NOTICEABLE SENSOR DIVERGENCE';
+                    ? (hrHasDropouts(sim) ? 'GOOD AGREEMENT, BUT HR DROPOUTS' : 'GOOD AGREEMENT WITH MINOR RESPONSE LAG')
+                    : (hrHasDropouts(sim) ? 'DIVERGENCE & HR DROPOUTS' : 'NOTICEABLE SENSOR DIVERGENCE');
 
-                const fullVerdictLabel = `VERDICT: ${verdictText} (${sim.overlapCount.toLocaleString()} SYNCED SAMPLES)`;
+                const fullVerdictLabel = hrHasDropouts(sim)
+                    ? `VERDICT: ${verdictText} (${sim.coveragePct}% COVERAGE)`
+                    : `VERDICT: ${verdictText} (${sim.overlapCount.toLocaleString()} SYNCED SAMPLES)`;
                 const verdictColor = sim.matchScore >= 92 ? '#10b981' : sim.matchScore >= 80 ? '#f59e0b' : '#f43f5e';
 
                 // Measure right-aligned verdict badge first so left title never collides with it
@@ -4078,7 +4135,7 @@
                 ctx.fillText(fitTextWithEllipsis(ctx, pairTitle, maxTitleWidth), 92, footerTop + 43);
 
                 const kpis = [
-                    { label: 'OVERALL MATCH SCORE', val: `${sim.matchScore}%`, sub: 'Composite Accuracy Index', color: '#10b981' },
+                    { label: 'OVERALL MATCH SCORE', val: `${sim.matchScore}%`, sub: sim.coveragePct != null ? (dropoutPointsLost(sim) > 0 ? `Accuracy ${sim.accuracyScore}% · Dropouts −${dropoutPointsLost(sim)} pts` : `Accuracy ${sim.accuracyScore}% · No dropouts`) : 'Composite Accuracy Index', color: sim.matchScore >= 92 ? '#10b981' : sim.matchScore >= 80 ? '#f59e0b' : '#f43f5e' },
                     { label: 'PEARSON CORRELATION', val: `r = ${sim.correlation.toFixed(3)}`, sub: '1.000 = Identical Trend', color: '#6366f1' },
                     { label: 'MEAN ABS ERROR (MAE)', val: `±${sim.mae} BPM`, sub: `RMSE: ${sim.rmse} BPM`, color: '#f59e0b' },
                     { label: 'WITHIN ±2 BPM', val: `${sim.within2Pct}%`, sub: `Tight Sensor Lock`, color: '#0ea5e9' },
@@ -4107,7 +4164,7 @@
 
                     ctx.fillStyle = textSub;
                     ctx.font = '500 14px Inter, system-ui, sans-serif';
-                    ctx.fillText(k.sub, bx + 18, by + 102);
+                    ctx.fillText(fitTextWithEllipsis(ctx, k.sub, boxW - 30), bx + 18, by + 102);
                 });
             } else {
                 ctx.textAlign = 'left';
@@ -5416,7 +5473,7 @@
                 ctx.fillText(fitTextWithEllipsis(ctx, refHeaderTitle, Math.max(300, badgeX - 92 - 40)), 92, footerTop + 40);
 
                 const cols = [
-                    { label: 'CHALLENGER DEVICE', x: 92, w: 460 },
+                    { label: 'CHALLENGER DEVICE', x: 92, w: 400 },
                     { label: 'GPS MATCH', x: 565, w: 165 },
                     { label: 'MEAN / MED OFFSET', x: 745, w: 255 },
                     { label: 'WITHIN 5m / 10m', x: 1015, w: 235 },
