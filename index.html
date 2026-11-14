@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=bbdc3214b7">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=1fa5f5d47d">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1195,7 +1195,7 @@
 
             if (state.syncStateMode === 'gps') {
                 pill.textContent = 'Synced by Clock';
-                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30';
+                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30';
             } else if (state.syncStateMode === 'reset') {
                 pill.textContent = '0s Relative Elapsed Time';
                 pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30';
