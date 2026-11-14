@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=fdb6c7ca40">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=bbdc3214b7">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -304,15 +304,13 @@
 
                 <!-- ALWAYS-VISIBLE GLOBAL TIME SYNC & AUTO-ALIGNMENT BAR -->
                 <div id="globalSyncToolbar" class="p-3 sm:p-4 rounded-xl bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-3">
-                    <div class="flex items-start gap-2.5 min-w-0">
-                        <div class="w-8 h-8 rounded-lg bg-orange-400/15 text-orange-600 dark:text-orange-300 flex items-center justify-center shrink-0 border border-orange-400/25">
-                            <i data-lucide="satellite" class="w-4 h-4"></i>
-                        </div>
+                    <div class="min-w-0">
                         <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100">Time Sync &amp; Alignment</span>
-                                <span id="syncStatusPill" class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">
-                                    Auto-Sync Ready (Clock)
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                                <span class="text-sm font-bold text-slate-800 dark:text-slate-100">Time Sync &amp; Alignment</span>
+                                <span id="syncStatusPillWrap" class="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30">
+                                    <i data-lucide="satellite" class="w-3.5 h-3.5 shrink-0"></i>
+                                    <span id="syncStatusPill">Auto-Sync Ready (Clock)</span>
                                 </span>
                                 <!-- Only shown after offsets were changed by hand or reset -->
                                 <button type="button" id="globalGpsSyncBtn" class="hidden inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline underline-offset-2 cursor-pointer" title="Undo manual changes and line all tracks up by recording clock again">
@@ -1169,6 +1167,7 @@
         function updateSyncStatusPillUI() {
             const pill = document.getElementById('syncStatusPill');
             if (!pill) return;
+            const pillWrap = document.getElementById('syncStatusPillWrap') || pill;
             const resyncLink = document.getElementById('globalGpsSyncBtn');
             if (resyncLink) resyncLink.classList.toggle('hidden', !(state.tracks.length >= 2 && state.syncStateMode !== 'gps'));
             const resetLink = document.getElementById('globalResetSyncBtn');
@@ -1190,19 +1189,19 @@
 
             if (state.tracks.length < 2) {
                 pill.textContent = 'Auto-Sync Ready (Clock)';
-                pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30';
+                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-orange-400/15 text-orange-600 dark:text-orange-300 border border-orange-400/30';
                 return;
             }
 
             if (state.syncStateMode === 'gps') {
-                pill.textContent = '✓ Synced by Clock';
-                pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30';
+                pill.textContent = 'Synced by Clock';
+                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30';
             } else if (state.syncStateMode === 'reset') {
                 pill.textContent = '0s Relative Elapsed Time';
-                pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30';
+                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30';
             } else {
                 pill.textContent = 'Manual / Custom Sync Offset';
-                pill.className = 'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30';
+                pillWrap.className = 'inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30';
             }
         }
 
