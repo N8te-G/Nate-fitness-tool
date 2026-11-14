@@ -2080,26 +2080,45 @@ svg.leaflet-image-layer.leaflet-interactive path {
         }
 
         // Moving average filter for smoothing series
-        function smoothSeries(points, windowSize, valueKey) {
-            if (windowSize <= 1) return points.map(p => p[valueKey]);
+        // Centred moving average over a window of `windowSec` SECONDS (not readings), so a device that
+        // records every 2 s gets the same smoothing as one that records every second
+        function smoothSeries(points, windowSec, valueKey) {
+            if (windowSec <= 1) return points.map(p => p[valueKey]);
             const result = [];
-            const half = Math.floor(windowSize / 2);
+            const half = windowSec / 2;
+            let lo = 0, hi = 0, sum = 0, count = 0; // running window [lo, hi)
             for (let i = 0; i < points.length; i++) {
-                if (points[i][valueKey] == null) {
-                    result.push(null);
-                    continue;
+                const t = points[i].elapsedSec;
+                while (hi < points.length && points[hi].elapsedSec <= t + half) {
+                    if (points[hi][valueKey] != null) { sum += points[hi][valueKey]; count++; }
+                    hi++;
                 }
-                let sum = 0;
-                let count = 0;
-                for (let j = Math.max(0, i - half); j <= Math.min(points.length - 1, i + half); j++) {
-                    if (points[j][valueKey] != null) {
-                        sum += points[j][valueKey];
-                        count++;
-                    }
+                while (lo < hi && points[lo].elapsedSec < t - half) {
+                    if (points[lo][valueKey] != null) { sum -= points[lo][valueKey]; count--; }
+                    lo++;
                 }
+                if (points[i][valueKey] == null) { result.push(null); continue; }
                 result.push(count > 0 ? +(sum / count).toFixed(1) : null);
             }
             return result;
+        }
+
+        // Average heart rate weighted by time: each reading counts for the time it covers (half the gap to
+        // its neighbours, capped at 10 s so pauses or strap drop-outs don't count). Matches how watches report
+        // average HR, and isn't skewed by devices that record more often when HR is changing.
+        function timeWeightedAvgHR(points) {
+            const pts = points.filter(p => p.hr != null);
+            if (!pts.length) return null;
+            if (pts.length === 1) return Math.round(pts[0].hr);
+            let sum = 0, wSum = 0;
+            for (let i = 0; i < pts.length; i++) {
+                const before = i > 0 ? Math.min(10, pts[i].elapsedSec - pts[i - 1].elapsedSec) / 2 : 0;
+                const after = i < pts.length - 1 ? Math.min(10, pts[i + 1].elapsedSec - pts[i].elapsedSec) / 2 : 0;
+                const w = before + after;
+                sum += pts[i].hr * w;
+                wSum += w;
+            }
+            return wSum > 0 ? Math.round(sum / wSum) : Math.round(pts.reduce((a, p) => a + p.hr, 0) / pts.length);
         }
 
         /********************************************************************
@@ -2265,29 +2284,39 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
             // Compute summary stats
             const validHR = points.map(p => p.hr).filter(v => v != null);
-            const avgHR = validHR.length ? Math.round(validHR.reduce((a, b) => a + b, 0) / validHR.length) : null;
+            const avgHR = timeWeightedAvgHR(points);
             const maxHR = validHR.length ? Math.max(...validHR) : null;
             const minHR = validHR.length ? Math.min(...validHR) : null;
 
+            // Elevation gain with a 3 m hysteresis: a climb only counts once it rises 3 m above the last low
+            // point, and then counts in full up to its peak. Ignores altimeter/GPS jitter on the flat but
+            // still counts gentle climbs made of many tiny steps.
+            const ELEV_HYSTERESIS_M = 3;
             let elevGain = 0;
-            let lastAlt = null;
+            let climbBase = null, climbPeak = null, climbing = false;
             for (const p of points) {
-                if (p.alt != null) {
-                    if (lastAlt != null && p.alt > lastAlt) {
-                        // Threshold filter to avoid micro noise
-                        if (p.alt - lastAlt > 0.15) {
-                            elevGain += (p.alt - lastAlt);
-                        }
-                    }
-                    lastAlt = p.alt;
+                if (p.alt == null) continue;
+                if (climbBase == null) { climbBase = p.alt; continue; }
+                if (!climbing) {
+                    if (p.alt < climbBase) climbBase = p.alt;
+                    else if (p.alt - climbBase >= ELEV_HYSTERESIS_M) { climbing = true; climbPeak = p.alt; }
+                } else if (p.alt > climbPeak) {
+                    climbPeak = p.alt;
+                } else if (climbPeak - p.alt >= ELEV_HYSTERESIS_M) {
+                    elevGain += climbPeak - climbBase;
+                    climbing = false;
+                    climbBase = p.alt;
                 }
             }
+            if (climbing) elevGain += climbPeak - climbBase;
 
             // Analyze GPS Signal Dropouts & Fix Integrity
             // A dropout is recorded when:
-            // 1. Time gap between consecutive valid GPS fixes > 5.0 seconds, OR
+            // 1. Time gap between consecutive valid GPS fixes > 5.5 seconds, OR
             // 2. Trackpoints are missing lat/lon coordinates during active recording, OR
-            // 3. Sudden anomalous GPS teleport jump (> 35 m/s ground speed)
+            // 3. Sudden anomalous GPS teleport jump (> 38 m/s ground speed)
+            // Time lost = the gap between fixes minus the device's normal recording interval
+            // (e.g. 20 missing fixes on a 1 s watch = 20 s lost; a glitch jump loses the jump's interval).
             const dropouts = [];
             let totalDropoutSec = 0;
             let longestDropoutSec = 0;
@@ -2295,6 +2324,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
             let lastValidGpsPt = null;
             let missingGpsRunStartPt = null;
             let missingGpsPointsCount = 0;
+            // The device's normal interval between GPS fixes (median), used to measure time lost
+            const fixIntervals = [];
+            for (let i = 1; i < points.length; i++) {
+                const a = points[i - 1], b = points[i];
+                if (a.lat != null && a.lon != null && b.lat != null && b.lon != null && b.elapsedSec > a.elapsedSec) {
+                    fixIntervals.push(b.elapsedSec - a.elapsedSec);
+                }
+            }
+            fixIntervals.sort((a, b) => a - b);
+            const nominalFixSec = fixIntervals.length ? Math.max(0.1, fixIntervals[Math.floor(fixIntervals.length / 2)]) : 1;
 
             for (let i = 0; i < points.length; i++) {
                 const pt = points[i];
@@ -2307,12 +2346,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
                         const speedMps = dt > 0 ? (distJump / dt) : 0;
 
                         if (missingGpsPointsCount > 0 || dt > 5.5 || speedMps > 38) {
-                            const gapSec = Math.max(dt, missingGpsPointsCount * 2);
+                            const isGlitchOnly = missingGpsPointsCount === 0 && dt <= 5.5;
+                            const gapSec = isGlitchOnly ? dt : Math.max(0, dt - nominalFixSec);
                             const reason = missingGpsPointsCount > 0
                                 ? `Signal lost (${missingGpsPointsCount} missing fixes)`
                                 : speedMps > 38
                                 ? `GPS glitch jump (${Math.round(distJump)}m)`
-                                : `Recording gap (${Math.round(dt)}s)`;
+                                : `Recording gap (${Math.round(gapSec)}s)`;
 
                             dropouts.push({
                                 index: dropouts.length + 1,
@@ -2341,10 +2381,32 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     missingGpsPointsCount++;
                 }
             }
+            // GPS lost and never regained before the recording ended (ignore a lone fix-less final point)
+            if (lastValidGpsPt && missingGpsPointsCount >= 3) {
+                const endPt = points[points.length - 1];
+                const gapSec = Math.max(0, endPt.elapsedSec - lastValidGpsPt.elapsedSec);
+                if (gapSec > 5.5) {
+                    dropouts.push({
+                        index: dropouts.length + 1,
+                        startElapsedSec: lastValidGpsPt.elapsedSec,
+                        endElapsedSec: endPt.elapsedSec,
+                        durationSec: +gapSec.toFixed(1),
+                        distanceJumpMeters: 0,
+                        lat: lastValidGpsPt.lat,
+                        lon: lastValidGpsPt.lon,
+                        endLat: lastValidGpsPt.lat,
+                        endLon: lastValidGpsPt.lon,
+                        distKm: +(lastValidGpsPt.distMeters / 1000).toFixed(2),
+                        reason: `Signal lost to end (${missingGpsPointsCount} missing fixes)`
+                    });
+                    totalDropoutSec += gapSec;
+                    if (gapSec > longestDropoutSec) longestDropoutSec = gapSec;
+                }
+            }
 
             const totalDurationSec = points.length > 1 ? (points[points.length - 1].elapsedSec - points[0].elapsedSec) : 0;
             const totalDistMeters = points.length > 0 ? points[points.length - 1].distMeters : 0;
-            const gpsIntegrityPct = totalDurationSec > 0
+            const gpsIntegrityPct = validGpsCount === 0 ? 0 : totalDurationSec > 0
                 ? +Math.max(0, Math.min(100, ((totalDurationSec - totalDropoutSec) / totalDurationSec) * 100)).toFixed(1)
                 : (validGpsCount > 0 ? 100 : 0);
 
@@ -2463,8 +2525,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
             let p95GpsOffset = null;
             if (gpsCount > 0) {
                 const sortedOffsets = gpsOffsetSeries.map(o => o.offsetMeters).sort((a, b) => a - b);
-                medianGpsOffset = +sortedOffsets[Math.floor(gpsCount * 0.5)].toFixed(1);
-                p95GpsOffset = +sortedOffsets[Math.floor(gpsCount * 0.95)].toFixed(1);
+                const mid = gpsCount >> 1;
+                medianGpsOffset = +(gpsCount % 2 ? sortedOffsets[mid] : (sortedOffsets[mid - 1] + sortedOffsets[mid]) / 2).toFixed(1);
+                // Nearest-rank 95th percentile
+                p95GpsOffset = +sortedOffsets[Math.max(0, Math.ceil(gpsCount * 0.95) - 1)].toFixed(1);
             }
 
             const gpsWithin5mPct = gpsCount > 0 ? +((within5mCount / gpsCount) * 100).toFixed(1) : null;
@@ -2498,6 +2562,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 gpsOffsetSeries,
                 meanAltDiff: altCount > 0 ? +(altSumDiff / altCount).toFixed(1) : null
             };
+        }
+
+        const HR_PAIR_MAX_GAP_SEC = 10;
+
+        // Time-of-day axis origin: the reference device's start clock. Every device is placed at
+        // origin + (its elapsed time + its sync offset), so this view lines up exactly like Elapsed Time.
+        // (Adding the offset to each device's own clock would count the clock difference twice.)
+        function clockAxisBaseMs() {
+            const ref = state.tracks.find(t => t.id === state.referenceTrackId) || state.tracks[0];
+            if (ref && Number.isFinite(ref.startTimeMs)) return ref.startTimeMs - (ref.timeOffsetSec || 0) * 1000;
+            const any = state.tracks.find(t => Number.isFinite(t.startTimeMs));
+            return any ? any.startTimeMs : 0;
+        }
+        function clockAxisX(trk, pt, baseMs = clockAxisBaseMs()) {
+            return baseMs + (pt.elapsedSec + (trk.timeOffsetSec || 0)) * 1000;
         }
 
         // x-value of a matched pair in the current x-axis units (elapsed s, km, or clock ms)
@@ -2535,18 +2614,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 const i = Math.max(0, high);
                 const j = Math.min(bTimes.length - 1, i + 1);
                 if (i === j) return bHRs[i];
+                // Do not invent heart rate across a gap in Track B's readings (> 10 s)
+                if (bTimes[j] - bTimes[i] > HR_PAIR_MAX_GAP_SEC) return null;
                 const ratio = (targetElapsedSec - bTimes[i]) / (bTimes[j] - bTimes[i]);
                 return bHRs[i] + ratio * (bHRs[j] - bHRs[i]);
             }
 
             const pairs = [];
+            const clockBase = clockAxisBaseMs();
             for (const pA of ptsA) {
                 const tA = pA.elapsedSec + offsetA;
                 const hrB = interpolateB(tA);
                 if (hrB != null) {
                     const pr = {
                         t: tA,
-                        ts: pA.timestamp != null ? pA.timestamp + offsetA * 1000 : null,
+                        ts: clockBase + tA * 1000,
                         distKm: +(pA.distMeters / 1000).toFixed(2),
                         hrA: pA.hr,
                         hrB: hrB,
@@ -3465,6 +3547,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
             const textColor = isDark ? '#94a3b8' : '#64748b';
 
             const visibleTracks = state.tracks.filter(t => t.visible);
+            const clockBase = clockAxisBaseMs();
 
             // Build HR Datasets
             const hrDatasets = visibleTracks.map(trk => {
@@ -3477,7 +3560,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     } else if (state.xAxisMode === 'distance') {
                         xVal = +(pt.distMeters / 1000).toFixed(3);
                     } else {
-                        xVal = pt.timestamp + trk.timeOffsetSec * 1000;
+                        xVal = clockAxisX(trk, pt, clockBase);
                     }
                     return { x: xVal, y: smoothedHR[i] };
                 }).filter(Boolean);
@@ -3693,7 +3776,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     let xVal;
                     if (state.xAxisMode === 'elapsed') xVal = pt.elapsedSec + trk.timeOffsetSec;
                     else if (state.xAxisMode === 'distance') xVal = +(pt.distMeters / 1000).toFixed(3);
-                    else xVal = pt.timestamp + trk.timeOffsetSec * 1000;
+                    else xVal = clockAxisX(trk, pt, clockBase);
                     return { x: xVal, y: smoothedAlt[i] };
                 }).filter(Boolean);
 
@@ -4114,9 +4197,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
             // Export range: the chart's zoomed section, or the whole workout
             const exportRange = document.getElementById('exportRangeSelect')?.value === 'zoom' && HR_NAV.win ? { ...HR_NAV.win } : null;
+            const clockBase = clockAxisBaseMs();
             const pointX = (trk, pt) => state.xAxisMode === 'elapsed' ? pt.elapsedSec + trk.timeOffsetSec
                 : state.xAxisMode === 'distance' ? pt.distMeters / 1000
-                : pt.timestamp + trk.timeOffsetSec * 1000;
+                : clockAxisX(trk, pt, clockBase);
             const inExportRange = x => !exportRange || (x >= exportRange.min && x <= exportRange.max);
             // Per-device stats for the exported range (whole-workout stats when not zoomed)
             const sectionStats = new Map(activeTracks.map(trk => {
@@ -4126,7 +4210,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 const pts = trk.points.filter(pt => inExportRange(pointX(trk, pt)));
                 const hrs = pts.map(pt => pt.hr).filter(v => v != null);
                 return [trk.id, {
-                    avgHR: hrs.length ? Math.round(hrs.reduce((a, v) => a + v, 0) / hrs.length) : null,
+                    avgHR: timeWeightedAvgHR(pts),
                     maxHR: hrs.length ? Math.max(...hrs) : null,
                     minHR: hrs.length ? Math.min(...hrs) : null,
                     pointCount: pts.length,
