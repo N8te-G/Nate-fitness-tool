@@ -797,6 +797,14 @@
                         </select>
                     </div>
 
+                    <!-- Export Range: zoomed section or whole workout -->
+                    <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
+                        <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Range:</span>
+                        <select id="exportRangeSelect" class="flex-1 sm:flex-none min-w-0 max-w-full truncate bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-semibold text-rose-600 dark:text-rose-400 focus:outline-none cursor-pointer">
+                            <option value="full">Whole workout</option>
+                        </select>
+                    </div>
+
                     <!-- Export Resolution -->
                     <div class="flex items-center gap-1.5 text-xs w-full sm:w-auto min-w-0">
                         <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Resolution:</span>
@@ -1803,7 +1811,13 @@
             };
         }
 
-        function computePairSimilarity(trackA, trackB) {
+        // x-value of a matched pair in the current x-axis units (elapsed s, km, or clock ms)
+        function pairX(pr) {
+            return state.xAxisMode === 'distance' ? pr.distKm : state.xAxisMode === 'timestamp' ? pr.ts : pr.t;
+        }
+
+        // xRange (optional): { min, max } in current x-axis units; limits stats to that section (used by exports)
+        function computePairSimilarity(trackA, trackB, xRange = null) {
             if (!trackA || !trackB) return null;
             const offsetA = Number.isFinite(trackA.timeOffsetSec) ? trackA.timeOffsetSec : (trackA.offsetSec || 0);
             const offsetB = Number.isFinite(trackB.timeOffsetSec) ? trackB.timeOffsetSec : (trackB.offsetSec || 0);
@@ -1841,14 +1855,16 @@
                 const tA = pA.elapsedSec + offsetA;
                 const hrB = interpolateB(tA);
                 if (hrB != null) {
-                    pairs.push({
+                    const pr = {
                         t: tA,
+                        ts: pA.timestamp != null ? pA.timestamp + offsetA * 1000 : null,
                         distKm: +(pA.distMeters / 1000).toFixed(2),
                         hrA: pA.hr,
                         hrB: hrB,
                         diff: hrB - pA.hr,
                         absDiff: Math.abs(hrB - pA.hr)
-                    });
+                    };
+                    if (!xRange || (pairX(pr) >= xRange.min && pairX(pr) <= xRange.max)) pairs.push(pr);
                 }
             }
 
@@ -1911,7 +1927,7 @@
         }
 
         // Compute Reference-vs-All comparisons for a given Master Reference Track (HR or GPS)
-        function computeMasterReferenceComparisons(refTrack, candidateList = null) {
+        function computeMasterReferenceComparisons(refTrack, candidateList = null, xRange = null) {
             const master = refTrack || state.tracks.find(t => t.id === state.referenceTrackId) || state.tracks[0];
             if (!master) return [];
             const pool = Array.isArray(candidateList)
@@ -1921,7 +1937,7 @@
             const results = [];
             for (const trk of pool) {
                 if (!trk || trk.id === master.id) continue;
-                let sim = computePairSimilarity(master, trk);
+                let sim = computePairSimilarity(master, trk, xRange);
                 if (!sim) {
                     const gpsOnly = computePairwiseGpsStats(master, trk);
                     if (gpsOnly && gpsOnly.gpsCount > 0) {
@@ -3397,11 +3413,36 @@
 
             const visibleTracks = state.tracks.filter(t => t.visible);
             const activeTracks = visibleTracks.length > 0 ? visibleTracks : state.tracks;
-            const totalPlottedPoints = activeTracks.reduce((acc, t) => acc + t.stats.pointCount, 0);
+
+            // Export range: the chart's zoomed section, or the whole workout
+            const exportRange = document.getElementById('exportRangeSelect')?.value === 'zoom' && HR_NAV.win ? { ...HR_NAV.win } : null;
+            const pointX = (trk, pt) => state.xAxisMode === 'elapsed' ? pt.elapsedSec + trk.timeOffsetSec
+                : state.xAxisMode === 'distance' ? pt.distMeters / 1000
+                : pt.timestamp + trk.timeOffsetSec * 1000;
+            const inExportRange = x => !exportRange || (x >= exportRange.min && x <= exportRange.max);
+            // Per-device stats for the exported range (whole-workout stats when not zoomed)
+            const sectionStats = new Map(activeTracks.map(trk => {
+                if (!exportRange) {
+                    return [trk.id, { avgHR: trk.stats.avgHR, maxHR: trk.stats.maxHR, minHR: trk.stats.minHR, pointCount: trk.stats.pointCount, durationSec: trk.stats.durationSec, distanceMeters: trk.stats.distanceMeters }];
+                }
+                const pts = trk.points.filter(pt => inExportRange(pointX(trk, pt)));
+                const hrs = pts.map(pt => pt.hr).filter(v => v != null);
+                return [trk.id, {
+                    avgHR: hrs.length ? Math.round(hrs.reduce((a, v) => a + v, 0) / hrs.length) : null,
+                    maxHR: hrs.length ? Math.max(...hrs) : null,
+                    minHR: hrs.length ? Math.min(...hrs) : null,
+                    pointCount: pts.length,
+                    durationSec: pts.length > 1 ? pts[pts.length - 1].elapsedSec - pts[0].elapsedSec : 0,
+                    distanceMeters: pts.length > 1 ? pts[pts.length - 1].distMeters - pts[0].distMeters : 0
+                }];
+            }));
+            const totalPlottedPoints = activeTracks.reduce((acc, t) => acc + sectionStats.get(t.id).pointCount, 0);
+            const sectionLabel = exportRange ? `Section: ${hrNavFormatX(exportRange.min)} – ${hrNavFormatX(exportRange.max)}` : '';
+
             const hrRefId = state.referenceTrackId || state.compareIdA;
             const trkA = state.tracks.find(t => t.id === (isRefMode ? hrRefId : (state.compareIdA || hrRefId))) || activeTracks[0];
             const trkB = state.tracks.find(t => t.id === state.compareIdB) || activeTracks[1] || activeTracks[0];
-            const refComparisons = isRefMode ? computeMasterReferenceComparisons(trkA, activeTracks) : [];
+            const refComparisons = isRefMode ? computeMasterReferenceComparisons(trkA, activeTracks, exportRange) : [];
 
             // 2. Top Header Banner
             // Header logo to the left of the title
@@ -3421,7 +3462,7 @@
             ctx.fillText(
                 fitTextWithEllipsis(
                     ctx,
-                    `Generated by Nate's HeartMatch  •  Mode: ${modeBadgeLabel}  •  X-Axis: ${xAxisLabel}  •  Smoothing: ${smoothLabel}  •  Total Points: ${totalPlottedPoints.toLocaleString()}`,
+                    `Generated by Nate's HeartMatch  •  ${sectionLabel ? sectionLabel + '  •  ' : ''}Mode: ${modeBadgeLabel}  •  X-Axis: ${xAxisLabel}  •  Smoothing: ${smoothLabel}  •  Points: ${totalPlottedPoints.toLocaleString()}`,
                     W - headerTextX - 60
                 ),
                 headerTextX,
@@ -3463,7 +3504,7 @@
                 const syncText = trk.timeOffsetSec !== 0 ? ` • Sync: ${trk.timeOffsetSec > 0 ? '+' : ''}${trk.timeOffsetSec}s` : '';
                 const statsLine1 = fitTextWithEllipsis(
                     ctx,
-                    `Avg: ${trk.stats.avgHR || '—'} bpm | Max: ${trk.stats.maxHR || '—'} | Min: ${trk.stats.minHR || '—'}`,
+                    `Avg: ${sectionStats.get(trk.id).avgHR || '—'} bpm | Max: ${sectionStats.get(trk.id).maxHR || '—'} | Min: ${sectionStats.get(trk.id).minHR || '—'}`,
                     trackCardW - 52
                 );
                 ctx.fillText(statsLine1, cx + 38, legendTop + 74);
@@ -3473,7 +3514,7 @@
                 ctx.font = '600 14px JetBrains Mono, monospace';
                 const statsLine2 = fitTextWithEllipsis(
                     ctx,
-                    `${trk.stats.pointCount.toLocaleString()} pts • ${formatDuration(trk.stats.durationSec)} • ${(trk.stats.distanceMeters / 1000).toFixed(2)} km${syncText}`,
+                    `${sectionStats.get(trk.id).pointCount.toLocaleString()} pts • ${formatDuration(sectionStats.get(trk.id).durationSec)} • ${(sectionStats.get(trk.id).distanceMeters / 1000).toFixed(2)} km${syncText}`,
                     trackCardW - 52
                 );
                 ctx.fillText(statsLine2, cx + 38, legendTop + 98);
@@ -3509,10 +3550,8 @@
                 for (let i = 0; i < trk.points.length; i++) {
                     if (smoothedHR[i] == null) continue;
                     const pt = trk.points[i];
-                    let xVal;
-                    if (state.xAxisMode === 'elapsed') xVal = pt.elapsedSec + trk.timeOffsetSec;
-                    else if (state.xAxisMode === 'distance') xVal = pt.distMeters / 1000;
-                    else xVal = pt.timestamp + trk.timeOffsetSec * 1000;
+                    const xVal = pointX(trk, pt);
+                    if (!inExportRange(xVal)) continue;
                     pts.push({ x: xVal, y: smoothedHR[i] });
                 }
                 return { trk, pts };
@@ -3534,6 +3573,7 @@
                 minY = Math.max(40, Math.floor((minY - 6) / 10) * 10);
                 maxY = Math.min(230, Math.ceil((maxY + 6) / 10) * 10);
                 if (maxY <= minY) maxY = minY + 40;
+                if (exportRange) { minX = exportRange.min; maxX = exportRange.max; }
                 if (maxX <= minX) maxX = minX + 1;
 
                 const mapX = x => plotLeft + ((x - minX) / (maxX - minX)) * plotW;
@@ -3631,7 +3671,7 @@
                 ctx.restore();
 
                 // 5. Optional Delta Error Strip (Supports both Pairwise B-A and Multi-Track Reference vs All)
-                const sim = computePairSimilarity(trkA, trkB);
+                const sim = computePairSimilarity(trkA, trkB, exportRange);
                 const deltaSeriesList = isRefMode
                     ? refComparisons.map(rc => ({ label: rc.challenger.name, color: rc.challenger.color, sim: rc.sim }))
                     : (sim && sim.pairs.length > 1 ? [{ label: trkB ? trkB.name : 'Track B', color: '#6366f1', sim }] : []);
@@ -3836,7 +3876,7 @@
             }
 
             // Pairwise (A vs B) Mode Footer
-            const sim = computePairSimilarity(trkA, trkB);
+            const sim = computePairSimilarity(trkA, trkB, exportRange);
 
             const pairTitle = (trkA && trkB)
                 ? `HOW CLOSELY DO THEY MATCH?  —  ${trkA.name}  vs.  ${trkB.name}`
@@ -3961,7 +4001,7 @@
                 const dateStr = new Date().toISOString().slice(0, 10);
                 triggerCanvasPngDownload(
                     canvas,
-                    `nates-heartmatch-hr-comparison-${dateStr}.png`,
+                    `nates-heartmatch-hr-comparison${document.getElementById('exportRangeSelect')?.value === 'zoom' && HR_NAV.win ? '-section' : ''}-${dateStr}.png`,
                     'High-resolution HR Comparison Report PNG downloaded!'
                 );
             } catch (err) {
@@ -5672,6 +5712,15 @@
                     }
                     const modeSelect = document.getElementById('exportCompareModeSelect');
                     if (modeSelect) modeSelect.value = state.comparisonMode;
+                    // Range: default to the zoomed section if the chart is zoomed, with "Whole workout" always available
+                    const rangeSelect = document.getElementById('exportRangeSelect');
+                    if (rangeSelect) {
+                        const w = HR_NAV.win;
+                        rangeSelect.innerHTML = w
+                            ? `<option value="zoom">Zoomed section (${hrNavFormatX(w.min)} – ${hrNavFormatX(w.max)})</option><option value="full">Whole workout</option>`
+                            : `<option value="full">Whole workout</option><option value="zoom" disabled>Zoomed section (zoom the chart first)</option>`;
+                        rangeSelect.value = w ? 'zoom' : 'full';
+                    }
                     exportModal.classList.remove('hidden');
                     renderHrExportReportCanvas();
                 });
@@ -5686,7 +5735,7 @@
                     downloadExportedPNG();
                 });
             }
-            ['exportTitleInput', 'exportCompareModeSelect', 'exportThemeSelect', 'exportResolutionSelect', 'exportDensitySelect', 'exportIncludeDelta'].forEach(id => {
+            ['exportTitleInput', 'exportCompareModeSelect', 'exportThemeSelect', 'exportRangeSelect', 'exportResolutionSelect', 'exportDensitySelect', 'exportIncludeDelta'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('input', () => renderHrExportReportCanvas());
