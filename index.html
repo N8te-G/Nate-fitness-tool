@@ -3474,7 +3474,9 @@
             const legendHeight = 115;
             const numTracks = Math.max(1, activeTracks.length);
             const cardGap = 16;
-            const totalAvailW = W - 120;
+            // Section exports reserve the right end of this row for an overview of where the section sits
+            const overviewW = exportRange ? 640 : 0;
+            const totalAvailW = W - 120 - (overviewW ? overviewW + cardGap : 0);
             const trackCardW = Math.min(560, (totalAvailW - cardGap * (numTracks - 1)) / numTracks);
 
             activeTracks.forEach((trk, idx) => {
@@ -3519,6 +3521,71 @@
                 );
                 ctx.fillText(statsLine2, cx + 38, legendTop + 98);
             });
+
+            // Overview card: the whole workout in miniature with the exported section highlighted
+            if (exportRange) {
+                const ox = W - 60 - overviewW;
+                drawRoundedRect(ctx, ox, legendTop, overviewW, legendHeight, 16);
+                ctx.fillStyle = bgCard;
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = borderCard;
+                ctx.stroke();
+
+                const fullSeries = activeTracks.map(trk => {
+                    const sm = smoothSeries(trk.points, state.smoothingWindow, 'hr');
+                    const pts = [];
+                    trk.points.forEach((pt, i) => { if (sm[i] != null) pts.push({ x: pointX(trk, pt), y: sm[i] }); });
+                    return { color: trk.color, pts };
+                }).filter(sr => sr.pts.length > 1);
+                let fx0 = Infinity, fx1 = -Infinity, fy0 = Infinity, fy1 = -Infinity;
+                fullSeries.forEach(sr => sr.pts.forEach(pt => {
+                    if (pt.x < fx0) fx0 = pt.x; if (pt.x > fx1) fx1 = pt.x;
+                    if (pt.y < fy0) fy0 = pt.y; if (pt.y > fy1) fy1 = pt.y;
+                }));
+
+                ctx.textAlign = 'left';
+                ctx.fillStyle = textMain;
+                ctx.font = 'bold 18px Inter, system-ui, sans-serif';
+                ctx.fillText('Exported section', ox + 18, legendTop + 30);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = textSub;
+                ctx.font = '500 14px JetBrains Mono, monospace';
+                const ofText = Number.isFinite(fx0) ? ` of ${hrNavFormatX(fx0)} – ${hrNavFormatX(fx1)}` : '';
+                ctx.fillText(fitTextWithEllipsis(ctx, `${hrNavFormatX(exportRange.min)} – ${hrNavFormatX(exportRange.max)}${ofText}`, overviewW - 200), ox + overviewW - 18, legendTop + 30);
+                ctx.textAlign = 'left';
+
+                if (Number.isFinite(fx0) && fx1 > fx0) {
+                    const mx0 = ox + 18, mx1 = ox + overviewW - 18, my0 = legendTop + 44, my1 = legendTop + legendHeight - 14;
+                    const mapMX = x => mx0 + ((x - fx0) / (fx1 - fx0)) * (mx1 - mx0);
+                    const mapMY = y => my1 - ((y - fy0) / Math.max(1, fy1 - fy0)) * (my1 - my0);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(mx0, my0 - 2, mx1 - mx0, my1 - my0 + 4);
+                    ctx.clip();
+                    fullSeries.forEach(sr => {
+                        const step = Math.max(1, Math.floor(sr.pts.length / 900));
+                        ctx.beginPath();
+                        for (let i = 0; i < sr.pts.length; i += step) {
+                            const px = mapMX(sr.pts[i].x), py = mapMY(sr.pts[i].y);
+                            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                        }
+                        ctx.strokeStyle = sr.color;
+                        ctx.lineWidth = 1.6;
+                        ctx.stroke();
+                    });
+                    ctx.restore();
+                    // Dim everything outside the exported section, then outline the section
+                    const sx0 = Math.max(mx0, mapMX(exportRange.min)), sx1 = Math.min(mx1, mapMX(exportRange.max));
+                    ctx.fillStyle = isDark ? 'rgba(9, 13, 22, 0.72)' : 'rgba(248, 250, 252, 0.78)';
+                    ctx.fillRect(mx0, my0 - 4, sx0 - mx0, my1 - my0 + 8);
+                    ctx.fillRect(sx1, my0 - 4, mx1 - sx1, my1 - my0 + 8);
+                    drawRoundedRect(ctx, sx0, my0 - 4, Math.max(4, sx1 - sx0), my1 - my0 + 8, 6);
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = '#F43F5E';
+                    ctx.stroke();
+                }
+            }
 
             // Dynamically size chart card & footer to accommodate multi-row Master Reference table if active
             const extraFooterRows = isRefMode ? Math.max(0, refComparisons.length - 2) : 0;
