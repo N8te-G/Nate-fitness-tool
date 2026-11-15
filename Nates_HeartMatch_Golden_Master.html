@@ -1209,7 +1209,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
             <!-- Readout for the touched/hovered moment (replaces the floating tooltip box) -->
             <div id="hrReadout" class="h-14 overflow-hidden flex flex-wrap items-center content-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/70 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
-                Touch the graph to see readings
+                Touch the chart to see readings
             </div>
 
             <!-- Main HR Canvas Wrapper -->
@@ -1241,7 +1241,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     <span id="deltaSubChartTitle" class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Instant Heart Rate Error (Track B − Track A in BPM)</span>
                     <span class="text-[11px] font-mono text-slate-400">0 BPM = Perfect Agreement</span>
                 </div>
-                <div class="relative h-36 w-full">
+                <div id="deltaReadout" data-readout-for="deltaChartCanvas" class="h-14 overflow-hidden flex flex-wrap items-center content-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/70 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">Touch the chart to see readings</div>
+                <div class="relative h-36 w-full mt-2">
                     <canvas id="deltaChartCanvas"></canvas>
                 </div>
             </div>
@@ -1389,6 +1390,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     </span>
                 </div>
 
+                <div id="elevReadout" class="h-14 overflow-hidden flex flex-wrap items-center content-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/70 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">Touch the chart to see readings</div>
                 <!-- Elevation Chart Canvas -->
                 <div class="relative h-72 sm:h-80 w-full">
                     <canvas id="elevationChartCanvas"></canvas>
@@ -1431,6 +1433,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
             <div id="distanceEmpty" class="hidden py-10 text-center text-sm text-slate-400">Load at least one file with GPS distance to see this chart.</div>
             <div id="distanceCharts" class="space-y-3">
+                <div id="distReadout" class="h-14 overflow-hidden flex flex-wrap items-center content-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/70 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">Touch the chart to see readings</div>
                 <div class="relative h-64 sm:h-72 w-full">
                     <canvas id="distanceChartCanvas"></canvas>
                 </div>
@@ -1867,6 +1870,109 @@ svg.leaflet-image-layer.leaflet-interactive path {
             '#ec4899', // Pink 500
             '#84cc16', // Lime 500
         ];
+
+        // ===== Chart readings: every chart shows its values in a fixed readout strip above it =====
+        // While a finger (or the mouse) is on a chart, a dashed line marks the spot and the strip shows each
+        // device's value there. Lift the finger / move the mouse away and the strip goes back to its hint.
+        const READOUT_HINT = 'Touch the chart to see readings';
+        // Each device's value nearest to x (devices record at different moments, so look each one up)
+        function chartValuesAtX(chart, x) {
+            return chart.data.datasets.map((ds, i) => {
+                if (!chart.isDatasetVisible(i) || !ds.data.length) return null;
+                const d = ds.data;
+                let lo = 0, hi = d.length - 1;
+                if (x < d[0].x || x > d[hi].x) return null;
+                while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (d[mid].x <= x) lo = mid; else hi = mid; }
+                const p = Math.abs(d[lo].x - x) <= Math.abs(d[hi].x - x) ? d[lo] : d[hi];
+                return { label: ds.label, color: ds.borderColor, y: p.y };
+            }).filter(Boolean);
+        }
+        // Builds a tooltip handler that writes into the readout strip `elId`
+        // fmtX(x) -> time/distance text, fmtY(y) -> value text, extra(rows) -> optional trailing text
+        function makeChartReadout(elId, fmtX, fmtY, extra) {
+            return ({ chart, tooltip }) => {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
+                    el.textContent = READOUT_HINT;
+                    return;
+                }
+                const x = tooltip.dataPoints[0].parsed.x;
+                const rows = chartValuesAtX(chart, x);
+                const parts = [`<span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${escapeHtml(fmtX(x))}</span>`];
+                rows.forEach(r => {
+                    const shortName = escapeHtml(String(r.label).split(' (')[0]);
+                    parts.push(`<span class="inline-flex items-center gap-1.5 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${r.color}"></span><span class="truncate max-w-[9rem]">${shortName}</span><span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${escapeHtml(fmtY(r.y))}</span></span>`);
+                });
+                const more = extra ? extra(rows) : '';
+                if (more) parts.push(`<span class="font-mono">${escapeHtml(more)}</span>`);
+                el.innerHTML = parts.join('');
+            };
+        }
+        function hideChartTooltip(chart) {
+            if (!chart) return;
+            chart.setActiveElements([]);
+            if (chart.tooltip) chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+            chart.update('none');
+            const ext = chart.options.plugins && chart.options.plugins.tooltip && chart.options.plugins.tooltip.external;
+            if (typeof ext === 'function') ext({ chart, tooltip: null });
+        }
+        if (typeof Chart !== 'undefined') {
+            // No floating boxes: charts report into their readout strip instead
+            Chart.defaults.plugins.tooltip.enabled = false;
+            // Dashed line marking the touched / hovered moment, on every chart
+            Chart.register({
+                id: 'crosshair',
+                afterDatasetsDraw(chart) {
+                    const active = chart.tooltip && chart.tooltip.getActiveElements ? chart.tooltip.getActiveElements() : [];
+                    if (!active.length) return;
+                    const x = active[0].element.x;
+                    const { top, bottom } = chart.chartArea;
+                    const c = chart.ctx;
+                    const dark = document.documentElement.classList.contains('dark');
+                    c.save();
+                    c.beginPath();
+                    c.moveTo(x, top);
+                    c.lineTo(x, bottom);
+                    c.lineWidth = 1.5;
+                    c.strokeStyle = dark ? 'rgba(226, 232, 240, 0.55)' : 'rgba(15, 23, 42, 0.45)';
+                    c.setLineDash([4, 4]);
+                    c.stroke();
+                    c.restore();
+                }
+            });
+            // Long device names are shortened in every chart legend so they fit on a phone
+            const defaultLegendLabels = Chart.defaults.plugins.legend.labels.generateLabels;
+            Chart.defaults.plugins.legend.labels.generateLabels = chart => defaultLegendLabels(chart)
+                .map(l => ({ ...l, text: l.text.length > 30 ? l.text.slice(0, 29) + '…' : l.text }));
+            // Every chart: the pop-up / readout goes away as soon as the finger is lifted
+            // After a quick tap, phones also send pretend mouse events (move / click) at the same spot.
+            // Charts would treat those as a hovering mouse and bring the pop-up straight back, so ignore them.
+            let lastTouchMs = 0;
+            const noteTouch = () => { lastTouchMs = Date.now(); };
+            window.addEventListener('touchstart', noteTouch, { passive: true, capture: true });
+            window.addEventListener('touchend', noteTouch, { passive: true, capture: true });
+            const isMouseFromTouch = e => !!e && /^(mouse|click)/.test(e.type) &&
+                ((e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) || Date.now() - lastTouchMs < 1000);
+            Chart.register({
+                id: 'hideOnTouchEnd',
+                beforeEvent(chart, args) {
+                    if (isMouseFromTouch(args.event && args.event.native)) return false;
+                },
+                afterInit(chart) {
+                    // Charts are re-created on the same canvas, so bind once per canvas and act on its current chart
+                    const canvas = chart.canvas;
+                    if (!canvas || canvas.dataset.hideOnTouchEnd) return;
+                    canvas.dataset.hideOnTouchEnd = '1';
+                    const hideNow = () => { const current = Chart.getChart(canvas); if (current) hideChartTooltip(current); };
+                    // Charts handle touches on the next frame, so clear again then in case a very quick tap is still queued
+                    const hide = () => { hideNow(); requestAnimationFrame(hideNow); };
+                    canvas.addEventListener('touchend', hide, { passive: true });
+                    canvas.addEventListener('touchcancel', hide, { passive: true });
+                    canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
+                }
+            });
+        }
 
         const state = {
             tracks: [],         // Array of parsed track objects
@@ -2644,6 +2750,24 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
+            {
+                version: '1.2',
+                date: '15 Nov 2026',
+                changes: [
+                    'Simpler chart readings: no more pop-up boxes. Every chart now has a readout strip above it (like the heart-rate chart) that shows the time, each device\'s value and the difference while your finger is on the chart, with a dashed line marking the spot.',
+                    'Readings always clear when you lift your finger (or move the mouse away), including after a quick tap.'
+                ]
+            },
+            {
+                version: '1.1',
+                date: '15 Nov 2026',
+                changes: [
+                    'Chart pop-ups now only show while your finger is on the chart (or the mouse is over it) and disappear when you let go. The heart-rate readout clears the same way.',
+                    'Pop-ups can no longer be cut off: they sit above your finger and always stay on screen, with each reading shown in full.',
+                    'Long device names are shortened in chart legends so they fit on a phone.',
+                    'Elevation chart time axis now starts at the start of the workout.'
+                ]
+            },
             {
                 version: '1.0',
                 date: '15 Nov 2026',
@@ -3754,7 +3878,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 const el = document.getElementById('hrReadout');
                 if (!el) return;
                 if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
-                    el.textContent = 'Touch the graph to see readings';
+                    el.textContent = 'Touch the chart to see readings';
                     return;
                 }
                 const pts = tooltip.dataPoints;
@@ -3768,26 +3892,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 }
                 el.innerHTML = parts.join('');
             };
-            // Thin vertical line marking the touched/hovered moment
-            const hrCrosshairPlugin = {
-                id: 'hrCrosshair',
-                afterDatasetsDraw(chart) {
-                    const active = chart.tooltip && chart.tooltip.getActiveElements ? chart.tooltip.getActiveElements() : [];
-                    if (!active.length) return;
-                    const x = active[0].element.x;
-                    const { top, bottom } = chart.chartArea;
-                    const c = chart.ctx;
-                    c.save();
-                    c.beginPath();
-                    c.moveTo(x, top);
-                    c.lineTo(x, bottom);
-                    c.lineWidth = 1.5;
-                    c.strokeStyle = isDark ? 'rgba(226, 232, 240, 0.55)' : 'rgba(15, 23, 42, 0.45)';
-                    c.setLineDash([4, 4]);
-                    c.stroke();
-                    c.restore();
-                }
-            };
 
             // 1. Primary Heart Rate Chart
             const hrCtx = document.getElementById('hrChartCanvas').getContext('2d');
@@ -3795,7 +3899,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
             state.hrChart = new Chart(hrCtx, {
                 type: 'line',
-                plugins: [hrCrosshairPlugin],
                 data: { datasets: hrDatasets },
                 options: {
                     // No 'mouseout': browsers fire it right after a touch tap; a real mouse leaving is handled below
@@ -3835,13 +3938,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 }
             });
 
-            hrCtx.canvas.onpointerleave = e => {
-                if (e.pointerType !== 'mouse' || !state.hrChart) return;
-                state.hrChart.setActiveElements([]);
-                state.hrChart.tooltip.setActiveElements([], { x: 0, y: 0 });
-                state.hrChart.update('none');
-                renderHrReadout({ tooltip: null });
-            };
 
             // 2. Delta Sub-Chart (Pairwise Track B - Track A, OR Multi-Track Challengers - Master Reference)
             const deltaCtx = document.getElementById('deltaChartCanvas').getContext('2d');
@@ -3899,8 +3995,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    events: ['mousemove', 'click', 'touchstart', 'touchmove'],
                     interaction: { mode: 'nearest', axis: 'x', intersect: false },
                     plugins: {
+                        tooltip: { external: makeChartReadout('deltaReadout', v => formatXTick(v), v => `${v >= 0 ? '+' : ''}${(+v).toFixed(1)} bpm`) },
                         legend: {
                             display: state.comparisonMode === 'reference' && deltaDatasets.length > 1,
                             position: 'top',
@@ -3956,8 +4054,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    events: ['mousemove', 'click', 'touchstart', 'touchmove'],
                     interaction: { mode: 'nearest', axis: 'x', intersect: false },
                     plugins: {
+                        tooltip: { external: makeChartReadout('elevReadout', v => formatXTick(v), v => `${(+v).toFixed(1)} m`, rows => rows.length === 2 ? `Δ ${Math.abs(rows[0].y - rows[1].y).toFixed(1)} m` : '') },
                         legend: {
                             position: 'top',
                             labels: { color: textColor, usePointStyle: true, boxWidth: 8 }
@@ -3966,6 +4066,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     scales: {
                         x: {
                             type: 'linear',
+                            bounds: 'data',
+                            min: elevDatasets.some(d => d.data.length) ? Math.min(...elevDatasets.flatMap(d => d.data.map(p => p.x))) : undefined,
+                            max: elevDatasets.some(d => d.data.length) ? Math.max(...elevDatasets.flatMap(d => d.data.map(p => p.x))) : undefined,
                             grid: { color: gridColor },
                             ticks: { color: textColor, maxTicksLimit: 7, callback: formatXTick }
                         },
@@ -4049,8 +4152,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
             // Both charts share the same time range so they line up
             const allX = distDatasets.flatMap(d => d.data.map(p => p.x));
             const commonX = { type: 'linear', min: Math.min(...allX), max: Math.max(...allX), grid: { color: gridColor }, ticks: { color: textColor, maxTicksLimit: 8, callback: tickFmt } };
-            // Long device names are shortened in the legend so they fit on a phone
-            const shortLegend = chart => Chart.defaults.plugins.legend.labels.generateLabels(chart).map(l => ({ ...l, text: l.text.length > 30 ? l.text.slice(0, 29) + '…' : l.text }));
+
             state.distChart = new Chart(document.getElementById('distanceChartCanvas').getContext('2d'), {
                 type: 'line',
                 data: { datasets: distDatasets },
@@ -4060,8 +4162,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     animation: false,
                     interaction: { mode: 'nearest', axis: 'x', intersect: false },
                     plugins: {
-                        legend: { position: 'top', labels: { color: textColor, usePointStyle: true, boxWidth: 8, generateLabels: shortLegend } },
-                        tooltip: { callbacks: { title: items => items.length ? tickFmt(items[0].parsed.x) : '', label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(2)} km` } }
+                        legend: { position: 'top', labels: { color: textColor, usePointStyle: true, boxWidth: 8 } },
+                        tooltip: { external: makeChartReadout('distReadout', tickFmt, v => `${(+v).toFixed(2)} km`, rows => rows.length === 2 ? `Δ ${Math.round(Math.abs(rows[0].y - rows[1].y) * 1000)} m` : '') }
                     },
                     scales: {
                         x: commonX,
@@ -4093,7 +4195,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     interaction: { mode: 'nearest', axis: 'x', intersect: false },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { title: items => items.length ? tickFmt(items[0].parsed.x) : '', label: c => `${c.dataset.label}: ${c.parsed.y >= 0 ? '+' : ''}${Math.round(c.parsed.y)} m` } }
+                        tooltip: { external: makeChartReadout('distReadout', tickFmt, v => `${v >= 0 ? '+' : ''}${Math.round(v)} m vs ref`) }
                     },
                     scales: {
                         x: commonX,
