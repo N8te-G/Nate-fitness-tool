@@ -1236,8 +1236,19 @@
             Chart.defaults.plugins.legend.labels.generateLabels = chart => defaultLegendLabels(chart)
                 .map(l => ({ ...l, text: l.text.length > 30 ? l.text.slice(0, 29) + '…' : l.text }));
             // Every chart: the pop-up / readout goes away as soon as the finger is lifted
+            // After a quick tap, phones also send pretend mouse events (move / click) at the same spot.
+            // Charts would treat those as a hovering mouse and bring the pop-up straight back, so ignore them.
+            let lastTouchMs = 0;
+            const noteTouch = () => { lastTouchMs = Date.now(); };
+            window.addEventListener('touchstart', noteTouch, { passive: true, capture: true });
+            window.addEventListener('touchend', noteTouch, { passive: true, capture: true });
+            const isMouseFromTouch = e => !!e && /^(mouse|click)/.test(e.type) &&
+                ((e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) || Date.now() - lastTouchMs < 1000);
             Chart.register({
                 id: 'hideOnTouchEnd',
+                beforeEvent(chart, args) {
+                    if (isMouseFromTouch(args.event && args.event.native)) return false;
+                },
                 afterInit(chart) {
                     // Charts are re-created on the same canvas, so bind once per canvas and act on its current chart
                     const canvas = chart.canvas;
@@ -2028,6 +2039,13 @@
 
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
+            {
+                version: '1.2',
+                date: '15 Nov 2026',
+                changes: [
+                    'Fix: chart pop-ups (and the heart-rate readout) sometimes stayed on screen after a quick tap. They now always disappear when you lift your finger.'
+                ]
+            },
             {
                 version: '1.1',
                 date: '15 Nov 2026',
