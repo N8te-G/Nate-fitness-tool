@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=bf48d43db2">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=8119a65aec">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -248,6 +248,26 @@
                 </div>
             </div>
             <button id="installHintCloseBtn" type="button" aria-label="Close" class="shrink-0 -mt-1 -mr-1 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">
+                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- One-time "updated" banner: shown the first time the app opens after an update -->
+    <div id="whatsNewBanner" role="status" aria-live="polite" class="hidden fixed z-50 left-4 right-4 bottom-4 sm:left-auto sm:right-5 sm:bottom-5 sm:w-96" style="margin-bottom: env(safe-area-inset-bottom);">
+        <div class="flex items-start gap-3 p-4 rounded-2xl shadow-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div class="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center text-white bg-gradient-to-br from-[#FF9A5B] via-[#F43F5E] to-[#7C3AED] shadow-md shadow-rose-500/20">
+                <i data-lucide="sparkles" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+                <p id="whatsNewTitle" class="text-sm font-semibold text-slate-900 dark:text-white">Updated</p>
+                <p id="whatsNewText" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5"></p>
+                <div class="flex items-center gap-2 mt-3">
+                    <button id="whatsNewOpenBtn" type="button" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-[#FF9A5B] via-[#F43F5E] to-[#7C3AED] hover:brightness-110 shadow-sm cursor-pointer">See what's new</button>
+                    <button id="whatsNewLaterBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">Dismiss</button>
+                </div>
+            </div>
+            <button id="whatsNewCloseBtn" type="button" aria-label="Close" class="shrink-0 -mt-1 -mr-1 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">
                 <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
         </div>
@@ -2061,6 +2081,13 @@
 
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
+            {
+                version: '1.3',
+                date: '15 Nov 2026',
+                changes: [
+                    'New: a short "Updated" note appears once after each update, with a link to see what\'s new.'
+                ]
+            },
             {
                 version: '1.2',
                 date: '15 Nov 2026',
@@ -6393,6 +6420,29 @@
             });
         }
 
+        // One-time "Updated to vX" banner, the first time the app opens after an update.
+        // Not shown on a first ever visit (nothing has changed for a new user), only when the version moves on.
+        function initWhatsNewBanner() {
+            const banner = document.getElementById('whatsNewBanner');
+            if (!banner) return;
+            const seen = loadPref('lastSeenVersion');
+            savePref('lastSeenVersion', APP_VERSION); // once only, whatever the user does next
+            if (!seen || seen === APP_VERSION) return;
+            const latest = CHANGELOG[0];
+            document.getElementById('whatsNewTitle').textContent = `Updated to v${APP_VERSION}`;
+            const more = latest.changes.length - 1;
+            const first = latest.changes[0].split(/(?<=\.)\s/)[0]; // first sentence of the top change
+            document.getElementById('whatsNewText').textContent = more > 0 ? `${first} Plus ${more} more change${more > 1 ? 's' : ''}.` : first;
+            const hide = () => banner.classList.add('hidden');
+            document.getElementById('whatsNewOpenBtn')?.addEventListener('click', () => {
+                hide();
+                document.getElementById('openChangelogBtn')?.click();
+            });
+            document.getElementById('whatsNewLaterBtn')?.addEventListener('click', hide);
+            document.getElementById('whatsNewCloseBtn')?.addEventListener('click', hide);
+            setTimeout(() => banner.classList.remove('hidden'), 1200);
+        }
+
         // One-time "install as an app" hint.
         // Shown at most once per device: never inside the installed app, never when opened as a local file.
         // Chrome/Edge: only shown when the browser says the app can be installed, with a real Install button.
@@ -6413,6 +6463,7 @@
             const hide = () => hint.classList.add('hidden');
             const show = () => {
                 if (shown || loadPref('installHintShown')) return;
+                if (!document.getElementById('whatsNewBanner')?.classList.contains('hidden')) return; // try again next visit
                 shown = true;
                 savePref('installHintShown', '1'); // once only, whatever the user does next
                 hint.classList.remove('hidden');
@@ -6482,6 +6533,7 @@
             initThemeToggle();
             initRememberedExportSettings();
             initHrNavigator();
+            initWhatsNewBanner();
             initInstallHint();
             if (typeof lucide !== 'undefined') lucide.createIcons();
             initPWAAndOfflineEngine();
