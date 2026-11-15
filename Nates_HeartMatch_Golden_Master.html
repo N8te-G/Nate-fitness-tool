@@ -2771,6 +2771,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '1.4',
+                date: '15 Nov 2026',
+                changes: [
+                    'Fix: the "Updated" note now also appears for people who were already using the app before the note was added.'
+                ]
+            },
+            {
                 version: '1.3',
                 date: '15 Nov 2026',
                 changes: [
@@ -7116,7 +7123,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
             if (!banner) return;
             const seen = loadPref('lastSeenVersion');
             savePref('lastSeenVersion', APP_VERSION); // once only, whatever the user does next
-            if (!seen || seen === APP_VERSION) return;
+            if (seen === APP_VERSION) return;
+            if (!seen) {
+                // No version remembered: a new visitor, or someone who used the app before this banner existed.
+                // Returning users already have the offline app installed or saved settings.
+                let usedBefore = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+                try {
+                    for (let i = 0; i < localStorage.length && !usedBefore; i++) {
+                        const k = localStorage.key(i);
+                        if (k === 'theme' || (k.startsWith('nft.') && k !== 'nft.lastSeenVersion')) usedBefore = true;
+                    }
+                } catch (_) {}
+                if (!usedBefore) return;
+            }
             const latest = CHANGELOG[0];
             document.getElementById('whatsNewTitle').textContent = `Updated to v${APP_VERSION}`;
             const more = latest.changes.length - 1;
