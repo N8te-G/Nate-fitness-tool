@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=8a9a8a64fc">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=bf48d43db2">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,6 +61,8 @@
             "maximize-2": [["path",{"d":"M15 3h6v6"}],["path",{"d":"m21 3-7 7"}],["path",{"d":"m3 21 7-7"}],["path",{"d":"M9 21H3v-6"}]],
             "moon": [["path",{"d":"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"}]],
             "mountain": [["path",{"d":"m8 3 4 8 5-5 5 15H2L8 3z"}]],
+            "route": [["circle",{"cx":"6","cy":"19","r":"3"}],["path",{"d":"M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"}],["circle",{"cx":"18","cy":"5","r":"3"}]],
+            "history": [["path",{"d":"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"}],["path",{"d":"M3 3v5h5"}],["path",{"d":"M12 7v5l4 2"}]],
             "rotate-ccw": [["path",{"d":"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"}],["path",{"d":"M3 3v5h5"}]],
             "satellite": [["path",{"d":"m13.5 6.5-3.148-3.148a1.205 1.205 0 0 0-1.704 0L6.352 5.648a1.205 1.205 0 0 0 0 1.704L9.5 10.5"}],["path",{"d":"M16.5 7.5 19 5"}],["path",{"d":"m17.5 10.5 3.148 3.148a1.205 1.205 0 0 1 0 1.704l-2.296 2.296a1.205 1.205 0 0 1-1.704 0L13.5 14.5"}],["path",{"d":"M9 21a6 6 0 0 0-6-6"}],["path",{"d":"M9.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l4.296-4.296a1.205 1.205 0 0 0 0-1.704l-2.296-2.296a1.205 1.205 0 0 0-1.704 0z"}]],
             "sparkles": [["path",{"d":"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"}],["path",{"d":"M20 2v4"}],["path",{"d":"M22 4h-4"}],["circle",{"cx":"4","cy":"20","r":"2"}]],
@@ -721,6 +723,52 @@
             </div>
         </section>
 
+        <!-- Distance Comparison -->
+        <section class="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="route" class="w-4 h-4 text-sky-500"></i>
+                        <h2 class="text-base font-bold">Distance Comparison (km)</h2>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        How far each device measured over time, and how far ahead or behind the reference it was
+                    </p>
+                </div>
+                <span id="distAxisBadge" class="shrink-0 text-xs font-mono px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500">
+                    X: Elapsed Time
+                </span>
+            </div>
+
+            <div id="distanceEmpty" class="hidden py-10 text-center text-sm text-slate-400">Load at least one file with GPS distance to see this chart.</div>
+            <div id="distanceCharts" class="space-y-3">
+                <div class="relative h-64 sm:h-72 w-full">
+                    <canvas id="distanceChartCanvas"></canvas>
+                </div>
+                <div>
+                    <div id="distanceGapTitle" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Distance gap vs reference (metres; above 0 = ahead)</div>
+                    <div class="relative h-28 sm:h-32 w-full">
+                        <canvas id="distanceGapCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 pt-1 text-center">
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Reference Distance</div>
+                    <div id="distRefTotal" class="text-sm font-bold font-mono mt-0.5">—</div>
+                </div>
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Difference at Finish</div>
+                    <div id="distFinishDiff" class="text-sm font-bold font-mono mt-0.5 text-sky-400">—</div>
+                </div>
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Largest Gap</div>
+                    <div id="distMaxGap" class="text-sm font-bold font-mono mt-0.5 text-amber-500">—</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Summary Comparison Table -->
         <section class="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6">
             <div class="flex items-center gap-2 mb-4">
@@ -750,6 +798,34 @@
             </div>
         </section>
     </main>
+
+    <!-- Footer: version & change log -->
+    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10 pt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+        <span>Nate's HeartMatch</span>
+        <span class="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
+        <span id="appVersionLabel" class="font-mono">v1.0</span>
+        <span class="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
+        <button type="button" id="openChangelogBtn" class="inline-flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400 hover:underline underline-offset-2 cursor-pointer">
+            <i data-lucide="history" class="w-3.5 h-3.5"></i>
+            <span>Change log</span>
+        </button>
+    </footer>
+
+    <!-- Change Log Modal -->
+    <div id="changelogModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl my-8">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="history" class="w-4 h-4 text-rose-500"></i>
+                    <h3 id="changelogTitle" class="text-base font-bold">Change Log</h3>
+                </div>
+                <button type="button" id="closeChangelogBtn" class="p-2 -mr-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer" aria-label="Close change log">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="changelogBody" class="mt-4 space-y-5 max-h-[65vh] overflow-y-auto pr-1"></div>
+        </div>
+    </div>
 
     <!-- High-Resolution Chart Image Export Modal -->
     <div id="exportModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -1876,6 +1952,40 @@
         }
 
         const HR_PAIR_MAX_GAP_SEC = 10;
+
+        // ===== Version & change log (newest first; add a new entry at the top for each release) =====
+        const CHANGELOG = [
+            {
+                version: '1.0',
+                date: '15 Nov 2026',
+                changes: [
+                    'New: Distance chart showing how far each device measured over time, plus how far ahead or behind the reference each one was.',
+                    'New: Version number and this change log at the bottom of the page.',
+                    'Overall Match now includes heart-rate dropouts: score = accuracy × coverage, with the points lost to dropouts shown on the page and in exports.',
+                    'Maths fixes from a full calculation audit: elevation gain, Clock Time alignment, no invented heart rate across gaps, GPS time lost, smoothing measured in seconds, time-weighted average HR, and GPS drift percentiles.',
+                    'Tidier Time Sync header: icon inside the status badge, badge stays on one line, green "Synced by Clock".'
+                ]
+            }
+        ];
+        const APP_VERSION = CHANGELOG[0].version;
+
+        function renderChangelog() {
+            const body = document.getElementById('changelogBody');
+            if (!body) return;
+            body.innerHTML = CHANGELOG.map((rel, i) => `
+                <div>
+                    <div class="flex items-baseline justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold font-mono">v${escapeHtml(rel.version)}</span>
+                            ${i === 0 ? '<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">Current</span>' : ''}
+                        </div>
+                        <span class="text-[11px] text-slate-500 dark:text-slate-400">${escapeHtml(rel.date)}</span>
+                    </div>
+                    <ul class="mt-2 space-y-1.5 text-xs text-slate-600 dark:text-slate-300 list-disc pl-4">
+                        ${rel.changes.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
+                    </ul>
+                </div>`).join('');
+        }
 
         // Time-of-day axis origin: the reference device's start clock. Every device is placed at
         // origin + (its elapsed time + its sync offset), so this view lines up exactly like Elapsed Time.
@@ -3178,6 +3288,143 @@
                     }
                 }
             });
+
+            renderDistanceCharts(visibleTracks, { gridColor, textColor, clockBase });
+        }
+
+        // Distance over time per device, plus each device's gap vs the GPS reference.
+        // Always plotted against time (Elapsed or Clock) - plotting distance against distance would say nothing.
+        function renderDistanceCharts(visibleTracks, { gridColor, textColor, clockBase }) {
+            if (state.distChart) { state.distChart.destroy(); state.distChart = null; }
+            if (state.distGapChart) { state.distGapChart.destroy(); state.distGapChart = null; }
+            const distTracks = visibleTracks.filter(t => trackHasGps(t) && t.stats.distanceMeters > 0);
+            const emptyEl = document.getElementById('distanceEmpty');
+            const chartsEl = document.getElementById('distanceCharts');
+            const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+            if (!chartsEl) return;
+            emptyEl.classList.toggle('hidden', distTracks.length > 0);
+            chartsEl.classList.toggle('hidden', distTracks.length === 0);
+            if (distTracks.length === 0) {
+                setText('distRefTotal', '—'); setText('distFinishDiff', '—'); setText('distMaxGap', '—');
+                return;
+            }
+
+            const useClock = state.xAxisMode === 'timestamp';
+            setText('distAxisBadge', useClock ? 'X: Clock Time' : 'X: Elapsed Time');
+            // x in seconds (elapsed) or ms (clock), with each device's sync offset applied
+            const xOf = (trk, sec) => useClock ? clockBase + (sec + (trk.timeOffsetSec || 0)) * 1000 : sec + (trk.timeOffsetSec || 0);
+            const tickFmt = v => useClock
+                ? new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : formatDuration(v);
+
+            const distDatasets = distTracks.map(trk => ({
+                label: trk.name,
+                data: trk.points.filter((_, i) => i % 2 === 0 || i === trk.points.length - 1)
+                    .map(pt => ({ x: xOf(trk, pt.elapsedSec), y: +(pt.distMeters / 1000).toFixed(3) })),
+                borderColor: trk.color,
+                backgroundColor: trk.color + '18',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.2
+            }));
+
+            // Reference: the GPS reference / GPS "A" device when it has distance, else the first device with distance
+            const wantedRefId = state.comparisonMode === 'reference' ? state.gpsReferenceTrackId : (state.gpsCompareIdA || state.gpsReferenceTrackId);
+            const ref = distTracks.find(t => t.id === wantedRefId) || distTracks[0];
+            const others = distTracks.filter(t => t.id !== ref.id);
+
+            // Each device's distance at the reference's moments (time-aligned with sync offsets), minus the reference's
+            const gapSeries = others.map(trk => {
+                const times = trk.points.map(p => p.elapsedSec + (trk.timeOffsetSec || 0));
+                const dists = trk.points.map(p => p.distMeters);
+                const at = t => {
+                    if (t < times[0] || t > times[times.length - 1]) return null;
+                    let lo = 0, hi = times.length - 1;
+                    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (times[mid] <= t) lo = mid; else hi = mid; }
+                    const span = times[hi] - times[lo];
+                    return span > 0 ? dists[lo] + (t - times[lo]) / span * (dists[hi] - dists[lo]) : dists[lo];
+                };
+                const data = [];
+                let lastT = -Infinity;
+                for (const pt of ref.points) {
+                    const t = pt.elapsedSec + (ref.timeOffsetSec || 0);
+                    if (t - lastT < 2) continue; // ~every 2 s keeps the chart light
+                    const d = at(t);
+                    if (d == null) continue;
+                    lastT = t;
+                    data.push({ x: xOf(ref, pt.elapsedSec), y: +(d - pt.distMeters).toFixed(1) });
+                }
+                return { trk, data };
+            });
+
+            // Both charts share the same time range so they line up
+            const allX = distDatasets.flatMap(d => d.data.map(p => p.x));
+            const commonX = { type: 'linear', min: Math.min(...allX), max: Math.max(...allX), grid: { color: gridColor }, ticks: { color: textColor, maxTicksLimit: 8, callback: tickFmt } };
+            // Long device names are shortened in the legend so they fit on a phone
+            const shortLegend = chart => Chart.defaults.plugins.legend.labels.generateLabels(chart).map(l => ({ ...l, text: l.text.length > 30 ? l.text.slice(0, 29) + '…' : l.text }));
+            state.distChart = new Chart(document.getElementById('distanceChartCanvas').getContext('2d'), {
+                type: 'line',
+                data: { datasets: distDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    plugins: {
+                        legend: { position: 'top', labels: { color: textColor, usePointStyle: true, boxWidth: 8, generateLabels: shortLegend } },
+                        tooltip: { callbacks: { title: items => items.length ? tickFmt(items[0].parsed.x) : '', label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(2)} km` } }
+                    },
+                    scales: {
+                        x: commonX,
+                        y: { title: { display: true, text: 'Distance (km)', color: textColor }, grid: { color: gridColor }, ticks: { color: textColor }, beginAtZero: true }
+                    }
+                }
+            });
+
+            setText('distanceGapTitle', others.length
+                ? `Distance gap vs ★ ${ref.name} (metres; above 0 = device measured further)`
+                : 'Distance gap vs reference (load a second GPS device to compare)');
+            state.distGapChart = new Chart(document.getElementById('distanceGapCanvas').getContext('2d'), {
+                type: 'line',
+                data: {
+                    datasets: gapSeries.map(({ trk, data }) => ({
+                        label: trk.name,
+                        data,
+                        borderColor: trk.color,
+                        backgroundColor: trk.color + '22',
+                        fill: others.length === 1 ? 'origin' : false,
+                        borderWidth: 1.5,
+                        pointRadius: 0
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { title: items => items.length ? tickFmt(items[0].parsed.x) : '', label: c => `${c.dataset.label}: ${c.parsed.y >= 0 ? '+' : ''}${Math.round(c.parsed.y)} m` } }
+                    },
+                    scales: {
+                        x: commonX,
+                        y: { grid: { color: c => c.tick.value === 0 ? (textColor + '99') : gridColor }, ticks: { color: textColor, maxTicksLimit: 5, callback: v => `${v > 0 ? '+' : ''}${v} m` } }
+                    }
+                }
+            });
+
+            // Footer figures
+            setText('distRefTotal', `${(ref.stats.distanceMeters / 1000).toFixed(2)} km`);
+            const fmtM = m => `${m >= 0 ? '+' : '−'}${Math.abs(Math.round(m))} m`;
+            const finals = gapSeries.filter(g => g.data.length).map(g => g.data[g.data.length - 1].y);
+            const allGaps = gapSeries.flatMap(g => g.data.map(d => d.y));
+            if (!finals.length) {
+                setText('distFinishDiff', '—'); setText('distMaxGap', '—');
+            } else {
+                setText('distFinishDiff', finals.length === 1 ? fmtM(finals[0]) : `avg ${fmtM(finals.reduce((a, v) => a + v, 0) / finals.length)}`);
+                const worst = allGaps.reduce((w, v) => Math.abs(v) > Math.abs(w) ? v : w, 0);
+                setText('distMaxGap', fmtM(worst));
+            }
         }
 
         /********************************************************************
@@ -5913,6 +6160,19 @@
                     renderMapTracks();
                 });
             }
+
+            // Version label & change log
+            const versionLabel = document.getElementById('appVersionLabel');
+            if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
+            const changelogModal = document.getElementById('changelogModal');
+            const closeChangelog = () => changelogModal && changelogModal.classList.add('hidden');
+            document.getElementById('openChangelogBtn')?.addEventListener('click', () => {
+                renderChangelog();
+                changelogModal.classList.remove('hidden');
+            });
+            document.getElementById('closeChangelogBtn')?.addEventListener('click', closeChangelog);
+            changelogModal?.addEventListener('click', e => { if (e.target === changelogModal) closeChangelog(); });
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChangelog(); });
 
             // High-Resolution HR Export Modal Controls
             const exportModal = document.getElementById('exportModal');
