@@ -1206,6 +1206,61 @@
         // While a finger (or the mouse) is on a chart, a dashed line marks the spot and the strip shows each
         // device's value there. Lift the finger / move the mouse away and the strip goes back to its hint.
         const READOUT_HINT = 'Touch the chart to see readings';
+
+        // Gaps in a time-ordered series of {x, t} points longer than HR_PAIR_MAX_GAP_SEC (t in seconds)
+        function findHrGaps(data, tKey = 't') {
+            const gapStarts = new Set();
+            const gapBands = [];
+            for (let i = 0; i < data.length - 1; i++) {
+                const sec = data[i + 1][tKey] - data[i][tKey];
+                if (sec > HR_PAIR_MAX_GAP_SEC) {
+                    gapStarts.add(i);
+                    gapBands.push({ x1: data[i].x, x2: data[i + 1].x, sec });
+                }
+            }
+            return { gapStarts, gapBands };
+        }
+        function bandAt(ds, x) {
+            return (ds.gapBands || []).find(b => x > b.x1 && x < b.x2) || null;
+        }
+
+        // Shaded band (in the device's colour) wherever a device had no heart-rate reading
+        const hrGapShadingPlugin = {
+            id: 'hrGapShading',
+            beforeDatasetsDraw(chart) {
+                const { ctx, chartArea: area, scales: { x: xs } } = chart;
+                let labelRow = 0;
+                chart.data.datasets.forEach((ds, i) => {
+                    if (!chart.isDatasetVisible(i) || !ds.gapBands || !ds.gapBands.length) return;
+                    const color = ds.borderColor;
+                    let usedRow = false;
+                    ds.gapBands.forEach(b => {
+                        const px1 = Math.max(area.left, xs.getPixelForValue(b.x1));
+                        const px2 = Math.min(area.right, xs.getPixelForValue(b.x2));
+                        if (px2 <= px1) return;
+                        ctx.save();
+                        ctx.fillStyle = color + '33';
+                        ctx.fillRect(px1, area.top, px2 - px1, area.bottom - area.top);
+                        ctx.fillStyle = color + 'cc';
+                        ctx.fillRect(px1, area.top, px2 - px1, 3);
+                        const w = px2 - px1;
+                        if (w >= 34) {
+                            const y = area.top + 15 + labelRow * 26;
+                            ctx.font = '600 10px Inter, system-ui, sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.fillStyle = color;
+                            ctx.fillText('No HR', (px1 + px2) / 2, y);
+                            ctx.font = '500 10px JetBrains Mono, monospace';
+                            const secs = Math.round(b.sec);
+                            ctx.fillText(secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`, (px1 + px2) / 2, y + 12);
+                            usedRow = true;
+                        }
+                        ctx.restore();
+                    });
+                    if (usedRow) labelRow++;
+                });
+            }
+        };
         // Each device's value nearest to x (devices record at different moments, so look each one up)
         function chartValuesAtX(chart, x) {
             return chart.data.datasets.map((ds, i) => {
@@ -2081,6 +2136,16 @@
 
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
+            {
+                version: '1.5',
+                date: '15 Nov 2026',
+                changes: [
+                    'New: heart-rate dropouts are shaded on the heart-rate chart in the device\'s colour, labelled with how long the device had no reading.',
+                    'The heart-rate line (and the difference strip) now breaks at a dropout instead of drawing a straight line across it.',
+                    'Touching inside a dropout shows "no reading" for that device instead of a value from the edge of the gap.',
+                    'The heart-rate chart\'s time axis now runs from the start to the end of the workout.'
+                ]
+            },
             {
                 version: '1.4',
                 date: '15 Nov 2026',
@@ -3069,8 +3134,8 @@
             const w = HR_NAV.win;
             const chart = state.hrChart;
             if (chart) {
-                chart.options.scales.x.min = w ? w.min : undefined;
-                chart.options.scales.x.max = w ? w.max : undefined;
+                chart.options.scales.x.min = w ? w.min : full.min;
+                chart.options.scales.x.max = w ? w.max : full.max;
                 // Fit the heart-rate scale to the visible section so detail fills the chart
                 if (w) {
                     let yMin = Infinity, yMax = -Infinity;
@@ -3087,8 +3152,8 @@
             }
             const dc = state.deltaChart;
             if (dc && dc.options?.scales?.x) {
-                dc.options.scales.x.min = w ? w.min : undefined;
-                dc.options.scales.x.max = w ? w.max : undefined;
+                dc.options.scales.x.min = w ? w.min : full.min;
+                dc.options.scales.x.max = w ? w.max : full.max;
                 dc.update('none');
             }
             // Overlay positions
@@ -3189,8 +3254,11 @@
                     } else {
                         xVal = clockAxisX(trk, pt, clockBase);
                     }
-                    return { x: xVal, y: smoothedHR[i] };
+                    return { x: xVal, y: smoothedHR[i], t: pt.elapsedSec };
                 }).filter(Boolean);
+
+                // Dropouts: no heart-rate reading for more than HR_PAIR_MAX_GAP_SEC
+                const { gapStarts, gapBands } = findHrGaps(data);
 
                 return {
                     label: trk.name,
@@ -3200,7 +3268,10 @@
                     borderWidth: 2.2,
                     pointRadius: 0,
                     pointHoverRadius: 5,
-                    tension: 0.25
+                    tension: 0.25,
+                    // Break the line across a dropout instead of drawing a straight line through it
+                    segment: { borderColor: ctx => gapStarts.has(ctx.p0DataIndex) ? 'transparent' : undefined },
+                    gapBands
                 };
             });
 
@@ -3219,7 +3290,7 @@
             };
 
             // Readings for the touched/hovered moment, shown in a bar above the chart instead of a floating box
-            const renderHrReadout = ({ tooltip }) => {
+            const renderHrReadout = ({ chart, tooltip }) => {
                 const el = document.getElementById('hrReadout');
                 if (!el) return;
                 if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
@@ -3227,13 +3298,29 @@
                     return;
                 }
                 const pts = tooltip.dataPoints;
-                const parts = [`<span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${formatXTick(pts[0].parsed.x)}</span>`];
+                const atX = pts[0].parsed.x;
+                const parts = [`<span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${formatXTick(atX)}</span>`];
+                const readings = [];
                 pts.forEach(dp => {
                     const shortName = escapeHtml(String(dp.dataset.label).split(' (')[0]);
-                    parts.push(`<span class="inline-flex items-center gap-1.5 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${dp.dataset.borderColor}"></span><span class="truncate max-w-[9rem]">${shortName}</span><span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${Math.round(dp.parsed.y * 10) / 10}</span></span>`);
+                    const gap = bandAt(dp.dataset, atX);
+                    if (!gap) readings.push(dp.parsed.y);
+                    const value = gap
+                        ? '<span class="font-semibold" style="color:' + dp.dataset.borderColor + '">no reading</span>'
+                        : `<span class="font-mono font-semibold text-slate-800 dark:text-slate-100">${Math.round(dp.parsed.y * 10) / 10}</span>`;
+                    parts.push(`<span class="inline-flex items-center gap-1.5 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${dp.dataset.borderColor}"></span><span class="truncate max-w-[9rem]">${shortName}</span>${value}</span>`);
                 });
-                if (pts.length === 2) {
-                    parts.push(`<span class="font-mono">Δ ${Math.abs(pts[0].parsed.y - pts[1].parsed.y).toFixed(1)} BPM</span>`);
+                // Devices with no reading at this moment (inside one of their dropouts)
+                if (chart) {
+                    const listed = new Set(pts.map(dp => dp.datasetIndex));
+                    chart.data.datasets.forEach((ds, i) => {
+                        if (listed.has(i) || !chart.isDatasetVisible(i) || !bandAt(ds, atX)) return;
+                        const shortName = escapeHtml(String(ds.label).split(' (')[0]);
+                        parts.push(`<span class="inline-flex items-center gap-1.5 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${ds.borderColor}"></span><span class="truncate max-w-[9rem]">${shortName}</span><span class="font-semibold" style="color:${ds.borderColor}">no reading</span></span>`);
+                    });
+                }
+                if (readings.length === 2) {
+                    parts.push(`<span class="font-mono">Δ ${Math.abs(readings[0] - readings[1]).toFixed(1)} BPM</span>`);
                 }
                 el.innerHTML = parts.join('');
             };
@@ -3244,6 +3331,7 @@
 
             state.hrChart = new Chart(hrCtx, {
                 type: 'line',
+                plugins: [hrGapShadingPlugin],
                 data: { datasets: hrDatasets },
                 options: {
                     // No 'mouseout': browsers fire it right after a touch tap; a real mouse leaving is handled below
@@ -3270,6 +3358,9 @@
                     scales: {
                         x: {
                             type: 'linear',
+                            // Start and end at the workout itself, not rounded out to a "nice" number
+                            min: hrDatasets.some(d => d.data.length) ? Math.min(...hrDatasets.filter(d => d.data.length).map(d => d.data[0].x)) : undefined,
+                            max: hrDatasets.some(d => d.data.length) ? Math.max(...hrDatasets.filter(d => d.data.length).map(d => d.data[d.data.length - 1].x)) : undefined,
                             title: { display: true, text: xAxisTitle, color: textColor },
                             grid: { color: gridColor },
                             ticks: { color: textColor, maxTicksLimit: 9, callback: formatXTick }
@@ -3302,7 +3393,8 @@
                     label: `${challenger.name} − ${trkA.name}`,
                     data: sim.pairs.map(pr => ({
                         x: state.xAxisMode === 'distance' ? pr.distKm : pr.t,
-                        y: +pr.diff.toFixed(1)
+                        y: +pr.diff.toFixed(1),
+                        t: pr.t
                     })),
                     borderColor: challenger.color,
                     backgroundColor: challenger.color + '18',
@@ -3319,7 +3411,8 @@
                 }
                 const deltaData = sim ? sim.pairs.map(pr => ({
                     x: state.xAxisMode === 'distance' ? pr.distKm : pr.t,
-                    y: +pr.diff.toFixed(1)
+                    y: +pr.diff.toFixed(1),
+                    t: pr.t
                 })) : [];
                 deltaDatasets = [{
                     label: 'BPM Difference (B − A)',
@@ -3331,6 +3424,14 @@
                     pointRadius: 0
                 }];
             }
+
+            deltaDatasets.forEach(ds => {
+                const { gapStarts } = findHrGaps(ds.data);
+                ds.segment = {
+                    borderColor: ctx => gapStarts.has(ctx.p0DataIndex) ? 'transparent' : undefined,
+                    backgroundColor: ctx => gapStarts.has(ctx.p0DataIndex) ? 'transparent' : undefined
+                };
+            });
 
             state.deltaChart = new Chart(deltaCtx, {
                 type: 'line',
