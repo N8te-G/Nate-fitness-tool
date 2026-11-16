@@ -25,7 +25,7 @@
     <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=8119a65aec">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=6a587af9da">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2137,6 +2137,15 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '1.6',
+                date: '16 Nov 2026',
+                changes: [
+                    'Clearer heart-rate verdicts in four bands from the overall match score: Excellent (90%+), Good (80–89.9%), Fair (70–79.9%) and Poor (below 70%), each with its own colour on the page and in exports.',
+                    'The verdict now shows what the score means in heart rate, e.g. "Good agreement · average error 2.9 bpm".',
+                    'Removed the "minor response lag" and "divergence" wording, which wasn\'t based on a measurement.'
+                ]
+            },
+            {
                 version: '1.5',
                 date: '15 Nov 2026',
                 changes: [
@@ -2372,6 +2381,19 @@
             const lost = dropoutPointsLost(sim);
             return lost > 0 ? `−${lost} pts dropouts` : 'no dropouts';
         }
+        // Heart-rate verdict bands from the overall match score (roughly: 90%+ = within ~3 bpm, 80% = ~3-6 bpm,
+        // 70% = ~6-10 bpm, below = over ~10 bpm off). One place, used by the page and both export layouts.
+        function hrBand(score) {
+            if (score >= 90) return { label: 'Excellent agreement', short: 'Excellent', cls: 'text-emerald-500', color: '#10b981' };
+            if (score >= 80) return { label: 'Good agreement', short: 'Good', cls: 'text-teal-500', color: '#14b8a6' };
+            if (score >= 70) return { label: 'Fair agreement', short: 'Fair', cls: 'text-amber-500', color: '#f59e0b' };
+            return { label: 'Poor agreement', short: 'Poor', cls: 'text-rose-500', color: '#f43f5e' };
+        }
+        // Verdict wording: the band, plus a note when the device had heart-rate dropouts
+        function hrVerdict(sim) {
+            return hrBand(sim.matchScore).label + (hrHasDropouts(sim) ? ', but HR dropouts' : '');
+        }
+
         // Dropouts are called out in the verdict when the device missed more than 5% of the time
         function hrHasDropouts(sim) {
             return !!sim && sim.coveragePct != null && sim.coveragePct < 95;
@@ -2847,7 +2869,7 @@
                 const totalOverlap = refComparisons.reduce((s, c) => s + c.sim.overlapCount, 0);
 
                 elMatch.textContent = `${avgMatch}%`;
-                elMatch.className = `text-2xl font-bold font-mono mt-1 ${avgMatch >= 92 ? 'text-emerald-500' : avgMatch >= 80 ? 'text-amber-500' : 'text-rose-500'}`;
+                elMatch.className = `text-2xl font-bold font-mono mt-1 ${hrBand(avgMatch).cls}`;
                 elVerdict.textContent = `Avg across ${refComparisons.length} challenger${refComparisons.length > 1 ? 's' : ''}`;
                 elCorr.textContent = avgCorr.toFixed(3);
                 elMAE.textContent = `${avgMAE} bpm`;
@@ -2862,8 +2884,8 @@
                 // Populate HR Reference Comparison Table (sorted by matchScore desc)
                 const sortedHr = [...refComparisons].sort((a, b) => b.sim.matchScore - a.sim.matchScore);
                 hrRefBody.innerHTML = sortedHr.map(({ challenger, sim }) => {
-                    const scoreCls = sim.matchScore >= 92 ? 'text-emerald-500' : sim.matchScore >= 80 ? 'text-amber-500' : 'text-rose-500';
-                    const verdictLabel = (sim.matchScore >= 92 ? 'Excellent Lock' : sim.matchScore >= 80 ? 'Good Match' : 'Divergence') + (hrHasDropouts(sim) ? ' · HR dropouts' : '');
+                    const scoreCls = hrBand(sim.matchScore).cls;
+                    const verdictLabel = hrBand(sim.matchScore).short + (hrHasDropouts(sim) ? ' · HR dropouts' : '');
                     const avgDiff = (challenger.stats.avgHR && trkA.stats.avgHR) ? (challenger.stats.avgHR - trkA.stats.avgHR) : null;
                     const avgDiffStr = avgDiff != null ? `(${avgDiff >= 0 ? '+' : ''}${avgDiff})` : '';
                     return `
@@ -2968,16 +2990,9 @@
             } else {
                 elMatch.textContent = `${sim.matchScore}%`;
                 if (elScoreParts) elScoreParts.textContent = scorePartsText(sim);
-                if (sim.matchScore >= 92) {
-                    elVerdict.textContent = 'Excellent sensor agreement';
-                    elMatch.className = 'text-2xl font-bold font-mono mt-1 text-emerald-500';
-                } else if (sim.matchScore >= 80) {
-                    elVerdict.textContent = hrHasDropouts(sim) ? 'Good match, but HR dropouts' : 'Good match with minor lag';
-                    elMatch.className = 'text-2xl font-bold font-mono mt-1 text-amber-500';
-                } else {
-                    elVerdict.textContent = hrHasDropouts(sim) ? 'Divergence & HR dropouts' : 'Noticeable sensor divergence';
-                    elMatch.className = 'text-2xl font-bold font-mono mt-1 text-rose-500';
-                }
+                // Verdict band, plus what the score means in heart rate
+                elVerdict.textContent = `${hrVerdict(sim)} · average error ${(+sim.mae).toFixed(1)} bpm`;
+                elMatch.className = `text-2xl font-bold font-mono mt-1 ${hrBand(sim.matchScore).cls}`;
 
                 elCorr.textContent = sim.correlation.toFixed(3);
                 elMAE.textContent = `${sim.mae} bpm`;
@@ -4458,7 +4473,7 @@
                 // Reference vs All Mode: Render Multi-Device Comparison Table vs Master Reference
                 const avgMatch = +(refComparisons.reduce((s, c) => s + c.sim.matchScore, 0) / refComparisons.length).toFixed(1);
                 const fullVerdictLabel = `AVG MATCH ACROSS ${refComparisons.length} CHALLENGER${refComparisons.length > 1 ? 'S' : ''}: ${avgMatch}%`;
-                const verdictColor = avgMatch >= 92 ? '#10b981' : avgMatch >= 80 ? '#f59e0b' : '#f43f5e';
+                const verdictColor = hrBand(avgMatch).color;
 
                 ctx.font = 'bold 16px JetBrains Mono, monospace';
                 const verdictTextW = ctx.measureText(fullVerdictLabel).width;
@@ -4524,8 +4539,8 @@
                     ctx.fillText(fitTextWithEllipsis(ctx, challenger.name, cols[0].w - 36), 120, textY);
 
                     // Match %
-                    const mColor = sim.matchScore >= 92 ? '#10b981' : sim.matchScore >= 80 ? '#f59e0b' : '#f43f5e';
-                    const vLabel = hrHasDropouts(sim) ? (sim.matchScore >= 80 ? 'GOOD · DROPOUTS' : 'DROPOUTS') : sim.matchScore >= 92 ? 'EXCELLENT LOCK' : sim.matchScore >= 80 ? 'MINOR LAG' : 'DIVERGENCE';
+                    const mColor = hrBand(sim.matchScore).color;
+                    const vLabel = hrBand(sim.matchScore).short.toUpperCase() + (hrHasDropouts(sim) ? ' · DROPOUTS' : '');
                     ctx.fillStyle = mColor;
                     ctx.font = 'bold 16px JetBrains Mono, monospace';
                     ctx.fillText(`${sim.matchScore}%`, cols[1].x, textY);
@@ -4581,16 +4596,12 @@
                 : 'HEART RATE MATCH & ACCURACY SUMMARY';
 
             if (sim) {
-                const verdictText = sim.matchScore >= 92
-                    ? 'EXCELLENT SENSOR AGREEMENT'
-                    : sim.matchScore >= 80
-                    ? (hrHasDropouts(sim) ? 'GOOD AGREEMENT, BUT HR DROPOUTS' : 'GOOD AGREEMENT WITH MINOR RESPONSE LAG')
-                    : (hrHasDropouts(sim) ? 'DIVERGENCE & HR DROPOUTS' : 'NOTICEABLE SENSOR DIVERGENCE');
+                const verdictText = hrVerdict(sim).toUpperCase();
 
                 const fullVerdictLabel = hrHasDropouts(sim)
                     ? `VERDICT: ${verdictText} (${sim.coveragePct}% COVERAGE)`
                     : `VERDICT: ${verdictText} (${sim.overlapCount.toLocaleString()} SYNCED SAMPLES)`;
-                const verdictColor = sim.matchScore >= 92 ? '#10b981' : sim.matchScore >= 80 ? '#f59e0b' : '#f43f5e';
+                const verdictColor = hrBand(sim.matchScore).color;
 
                 // Measure right-aligned verdict badge first so left title never collides with it
                 ctx.font = 'bold 16px JetBrains Mono, monospace';
@@ -4619,7 +4630,7 @@
                 ctx.fillText(fitTextWithEllipsis(ctx, pairTitle, maxTitleWidth), 92, footerTop + 43);
 
                 const kpis = [
-                    { label: 'OVERALL MATCH SCORE', val: `${sim.matchScore}%`, sub: sim.coveragePct != null ? (dropoutPointsLost(sim) > 0 ? `Accuracy ${sim.accuracyScore}% · Dropouts −${dropoutPointsLost(sim)} pts` : `Accuracy ${sim.accuracyScore}% · No dropouts`) : 'Composite Accuracy Index', color: sim.matchScore >= 92 ? '#10b981' : sim.matchScore >= 80 ? '#f59e0b' : '#f43f5e' },
+                    { label: 'OVERALL MATCH SCORE', val: `${sim.matchScore}%`, sub: sim.coveragePct != null ? (dropoutPointsLost(sim) > 0 ? `Accuracy ${sim.accuracyScore}% · Dropouts −${dropoutPointsLost(sim)} pts` : `Accuracy ${sim.accuracyScore}% · No dropouts`) : 'Composite Accuracy Index', color: hrBand(sim.matchScore).color },
                     { label: 'PEARSON CORRELATION', val: `r = ${sim.correlation.toFixed(3)}`, sub: '1.000 = Identical Trend', color: '#6366f1' },
                     { label: 'MEAN ABS ERROR (MAE)', val: `±${sim.mae} BPM`, sub: `RMSE: ${sim.rmse} BPM`, color: '#f59e0b' },
                     { label: 'WITHIN ±2 BPM', val: `${sim.within2Pct}%`, sub: `Tight Sensor Lock`, color: '#0ea5e9' },
