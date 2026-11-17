@@ -22,10 +22,10 @@
             }
         } catch (_) {}
     </script>
-    <title>Nate's HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
+    <title>HeartMatch — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=7d41ef70af">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=3ae6772691">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,7 +185,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
                 <!-- App logo (same design as icon.svg, inlined so it works without extra files) -->
-                <svg class="w-10 h-10 rounded-xl shadow-lg shadow-rose-500/25 shrink-0" viewBox="0 0 512 512" role="img" aria-label="Nate's HeartMatch logo">
+                <svg class="w-10 h-10 rounded-xl shadow-lg shadow-rose-500/25 shrink-0" viewBox="0 0 512 512" role="img" aria-label="HeartMatch logo">
                     <defs>
                         <linearGradient id="hdrLogoBg" x1="0" y1="0" x2="1" y2="1">
                             <stop offset="0" stop-color="#FF9A5B"/><stop offset="0.5" stop-color="#F43F5E"/><stop offset="1" stop-color="#7C3AED"/>
@@ -206,7 +206,7 @@
                 </svg>
                 <div class="min-w-0">
                     <h1 class="font-bold text-base sm:text-lg tracking-tight leading-none flex items-center gap-2 truncate">
-                        <span>Nate's HeartMatch</span>
+                        <span>HeartMatch <span class="ml-0.5 text-[0.72em] font-semibold bg-gradient-to-r from-rose-600 to-violet-600 dark:from-rose-400 dark:to-violet-400 bg-clip-text text-transparent">by Nate</span></span>
                         <span class="hidden md:inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/20">TCX / GPX Lab</span>
                     </h1>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">Multi-device Heart Rate, GPS & Elevation Comparison</p>
@@ -236,12 +236,12 @@
     </noscript>
 
     <!-- One-time "install as an app" hint (shown once per device, never inside the installed app) -->
-    <div id="installHint" role="dialog" aria-live="polite" aria-label="Install Nate's HeartMatch" class="hidden fixed z-50 left-4 right-4 bottom-4 sm:left-auto sm:right-5 sm:bottom-5 sm:w-96" style="margin-bottom: env(safe-area-inset-bottom);">
+    <div id="installHint" role="dialog" aria-live="polite" aria-label="Install HeartMatch" class="hidden fixed z-50 left-4 right-4 bottom-4 sm:left-auto sm:right-5 sm:bottom-5 sm:w-96" style="margin-bottom: env(safe-area-inset-bottom);">
         <div class="flex items-start gap-3 p-4 rounded-2xl shadow-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
             <img src="./icon-192.png" alt="" class="w-11 h-11 rounded-xl shrink-0 shadow-md shadow-rose-500/20">
             <div class="min-w-0 flex-1">
                 <p class="text-sm font-semibold text-slate-900 dark:text-white">Install as an app</p>
-                <p id="installHintText" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Add Nate's HeartMatch to your home screen for quick, full-screen access, even offline.</p>
+                <p id="installHintText" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Add HeartMatch to your home screen for quick, full-screen access, even offline.</p>
                 <div class="flex items-center gap-2 mt-3">
                     <button id="installHintInstallBtn" type="button" class="hidden px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-[#FF9A5B] via-[#F43F5E] to-[#7C3AED] hover:brightness-110 shadow-sm cursor-pointer">Install</button>
                     <button id="installHintLaterBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">Not now</button>
@@ -824,7 +824,9 @@
 
     <!-- Footer: version & change log -->
     <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10 pt-2 text-center text-xs text-slate-500 dark:text-slate-400">
-        <span>Nate's HeartMatch</span>
+        <span class="font-semibold text-slate-600 dark:text-slate-300">HeartMatch</span>
+        <span class="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
+        <span>by Nate</span>
         <span class="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
         <span id="appVersionLabel" class="font-mono">v1.0</span>
         <span class="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
@@ -882,7 +884,7 @@
                     <!-- Custom Report Title -->
                     <div class="flex items-center gap-2 text-xs w-full sm:w-auto min-w-0">
                         <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Title:</span>
-                        <input id="exportTitleInput" type="text" value="Nate's HeartMatch — Heart Rate Comparison" class="flex-1 sm:flex-none min-w-0 sm:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                        <input id="exportTitleInput" type="text" value="Heart Rate Comparison" placeholder="e.g. Heart Rate Comparison" class="flex-1 sm:flex-none min-w-0 sm:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500" />
                     </div>
 
                     <!-- Workout type (shared by both export windows; used on the image and in the file name) -->
@@ -980,7 +982,7 @@
                     <!-- Custom Report Title -->
                     <div class="flex items-center gap-2 text-xs w-full sm:w-auto min-w-0">
                         <span class="shrink-0 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">Title:</span>
-                        <input id="gpsExportTitleInput" type="text" value="Nate's HeartMatch — GPS Track & Dropout Comparison" class="flex-1 sm:flex-none min-w-0 sm:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                        <input id="gpsExportTitleInput" type="text" value="GPS Track & Dropout Comparison" placeholder="e.g. GPS Track Comparison" class="flex-1 sm:flex-none min-w-0 sm:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500" />
                     </div>
 
                     <!-- Workout type (shared by both export windows; used on the image and in the file name) -->
@@ -1181,7 +1183,7 @@
 
         function injectDynamicDataUriManifest(icon192, icon512) {
             const manifestObj = {
-                name: "Nate's HeartMatch",
+                name: "HeartMatch",
                 short_name: "HeartMatch",
                 description: "Offline-ready Multi-device TCX & GPX Heart Rate, GPS & Elevation Comparison Tool",
                 start_url: window.location.href.split('#')[0],
@@ -2168,6 +2170,15 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.1',
+                date: '17 Nov 2026',
+                changes: [
+                    'The app is now called HeartMatch, with "by Nate" in the logo\'s pink → purple gradient in the header and on exported images, and in the footer.',
+                    'Export titles always start with "HeartMatch by Nate", followed by your own title from the export window. Long titles shrink to fit instead of being cut off.',
+                    'Exported files are now named heartmatch-hr-… and heartmatch-gps-… (still by workout date, time and type).'
+                ]
+            },
+            {
                 version: '2.0',
                 date: '17 Nov 2026',
                 changes: [
@@ -2464,6 +2475,42 @@
             const when = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
             const type = workoutType().toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
             return type ? `${when}-${type}` : when;
+        }
+
+        // Export report title: always "HeartMatch by Nate" (with "by Nate" in the logo's pink → purple gradient),
+        // then " — " and the title typed in the export window. A long title shrinks the whole line to fit
+        // (down to 60% size); only a title too long even then is cut with "…".
+        function drawExportTitle(ctx, title, x, y, maxW, isDark, textMain) {
+            // Ignore the app name if it was typed into the box, so it never appears twice
+            const custom = String(title || '').trim().replace(/^HeartMatch(\s+by\s+Nate)?\s*[—–:-]?\s*/i, '');
+            const tail = custom ? `— ${custom}` : '';
+            const widthAt = k => {
+                ctx.font = `bold ${38 * k}px Inter, system-ui, sans-serif`;
+                const a = ctx.measureText('HeartMatch').width, c = tail ? ctx.measureText(tail).width : 0;
+                ctx.font = `600 ${27 * k}px Inter, system-ui, sans-serif`;
+                return a + 12 * k + ctx.measureText('by Nate').width + (tail ? 12 * k + c : 0);
+            };
+            const k = Math.max(0.6, Math.min(1, maxW / widthAt(1)));
+            ctx.save();
+            ctx.textAlign = 'left';
+            ctx.fillStyle = textMain;
+            ctx.font = `bold ${38 * k}px Inter, system-ui, sans-serif`;
+            ctx.fillText('HeartMatch', x, y);
+            let cx = x + ctx.measureText('HeartMatch').width + 12 * k;
+            ctx.font = `600 ${27 * k}px Inter, system-ui, sans-serif`;
+            const byW = ctx.measureText('by Nate').width;
+            const grad = ctx.createLinearGradient(cx, 0, cx + byW, 0);
+            grad.addColorStop(0, isDark ? '#fb7185' : '#e11d48');
+            grad.addColorStop(1, isDark ? '#a78bfa' : '#7c3aed');
+            ctx.fillStyle = grad;
+            ctx.fillText('by Nate', cx, y);
+            cx += byW + 12 * k;
+            if (tail) {
+                ctx.fillStyle = textMain;
+                ctx.font = `bold ${38 * k}px Inter, system-ui, sans-serif`;
+                ctx.fillText(fitTextWithEllipsis(ctx, tail, Math.max(0, x + maxW - cx)), cx, y);
+            }
+            ctx.restore();
         }
 
         // Top-right badge on the exports: workout date & start time (large) with the workout type under it.
@@ -4193,7 +4240,7 @@
             const isDark = theme === 'dark';
             const includeDelta = document.getElementById('exportIncludeDelta')?.checked !== false;
             const densityMode = document.getElementById('exportDensitySelect')?.value || 'all';
-            const customTitle = (document.getElementById('exportTitleInput')?.value || '').trim() || "Nate's HeartMatch — Heart Rate Comparison";
+            const customTitle = (document.getElementById('exportTitleInput')?.value || '').trim() || "";
 
             // Palette tokens for export canvas
             const bgPrimary = isDark ? '#090d16' : '#f8fafc';
@@ -4249,16 +4296,13 @@
             drawAppLogo(ctx, 60, 40, headerLogoSize, 17);
             const badgeW = drawExportWorkoutBadge(ctx, W - 60, 34, 90, workoutDateLabel(trkA), workoutType(), isDark, textMain);
             const headerMaxW = W - headerTextX - 60 - (badgeW ? badgeW + 40 : 0);
-            ctx.textAlign = 'left';
-            ctx.fillStyle = textMain;
-            ctx.font = 'bold 38px Inter, system-ui, sans-serif';
-            ctx.fillText(fitTextWithEllipsis(ctx, customTitle, headerMaxW), headerTextX, 74);
+            drawExportTitle(ctx, customTitle, headerTextX, 74, headerMaxW, isDark, textMain);
 
             const smoothLabel = state.smoothingWindow === 1 ? 'Raw Unfiltered (1s)' : `${state.smoothingWindow}s Moving Average`;
             const xAxisLabel = state.xAxisMode === 'elapsed' ? 'Elapsed Time' : state.xAxisMode === 'distance' ? 'Distance (km)' : 'Clock Time';
             const modeBadgeLabel = isRefMode ? `Master HR Reference (${trkA ? trkA.name : '—'}) vs. All` : 'Pairwise Comparison';
             drawExportSubheader(ctx, '',
-                `Generated by Nate's HeartMatch  •  ${sectionLabel ? sectionLabel + '  •  ' : ''}Mode: ${modeBadgeLabel}  •  X-Axis: ${xAxisLabel}  •  Smoothing: ${smoothLabel}  •  Points: ${totalPlottedPoints.toLocaleString()}`,
+                `Generated by HeartMatch  •  ${sectionLabel ? sectionLabel + '  •  ' : ''}Mode: ${modeBadgeLabel}  •  X-Axis: ${xAxisLabel}  •  Smoothing: ${smoothLabel}  •  Points: ${totalPlottedPoints.toLocaleString()}`,
                 headerTextX, 110, headerMaxW, textMain, textSub);
 
             // 3. Device Legend & Per-Device Stats Row (y = 135..250)
@@ -4864,7 +4908,7 @@
                 const hrRef = state.tracks.find(t => t.id === state.compareIdA);
                 triggerCanvasPngDownload(
                     canvas,
-                    `nates-heartmatch-hr-${exportFileStem(hrRef)}${document.getElementById('exportRangeSelect')?.value === 'zoom' && HR_NAV.win ? '-section' : ''}.png`,
+                    `heartmatch-hr-${exportFileStem(hrRef)}${document.getElementById('exportRangeSelect')?.value === 'zoom' && HR_NAV.win ? '-section' : ''}.png`,
                     'High-resolution HR Comparison Report PNG downloaded!'
                 );
             } catch (err) {
@@ -5067,7 +5111,7 @@
             const showSplits = document.getElementById('gpsExportShowSplits')?.checked !== false;
             const showOffsetChart = document.getElementById('gpsExportShowOffsetChart')?.checked !== false;
             const showZoomBoxes = document.getElementById('gpsExportShowZoomBoxes')?.checked !== false;
-            const customTitle = (document.getElementById('gpsExportTitleInput')?.value || '').trim() || "Nate's HeartMatch — GPS Track & Dropout Comparison";
+            const customTitle = (document.getElementById('gpsExportTitleInput')?.value || '').trim() || "";
             const statusEl = document.getElementById('gpsExportTileStatus');
 
             const bgPrimary = isDark ? '#090d16' : '#f8fafc';
@@ -5323,14 +5367,11 @@
             drawAppLogo(ctx, 60, 37, headerLogoSize, 17);
             const badgeW = drawExportWorkoutBadge(ctx, W - 60, 31, 90, workoutDateLabel(trkA), workoutType(), isDark, textMain);
             const headerMaxW = W - headerTextX - 60 - (badgeW ? badgeW + 40 : 0);
-            ctx.textAlign = 'left';
-            ctx.fillStyle = textMain;
-            ctx.font = 'bold 38px Inter, system-ui, sans-serif';
-            ctx.fillText(fitTextWithEllipsis(ctx, customTitle, headerMaxW), headerTextX, 72);
+            drawExportTitle(ctx, customTitle, headerTextX, 72, headerMaxW, isDark, textMain);
 
             const modeBadgeLabel = isRefMode ? `Master GPS Reference (${trkA ? trkA.name : '—'}) vs. All` : 'Pairwise Comparison';
             drawExportSubheader(ctx, '',
-                `Generated by Nate's HeartMatch  •  Mode: ${modeBadgeLabel}  •  Map Layer: ${bgTypeLabel}  •  GPS Fixes: ${totalGpsPts.toLocaleString()}  •  Dropouts: ${totalDropouts}`,
+                `Generated by HeartMatch  •  Mode: ${modeBadgeLabel}  •  Map Layer: ${bgTypeLabel}  •  GPS Fixes: ${totalGpsPts.toLocaleString()}  •  Dropouts: ${totalDropouts}`,
                 headerTextX, 108, headerMaxW, textMain, textSub);
 
             // 3. Device Legend & Per-Device GPS Dropout Breakdown Cards (y = 132..250)
@@ -6265,7 +6306,7 @@
             const canvas = document.getElementById('gpsExportPreviewCanvas');
             if (!canvas) return;
             const gpsRef = state.tracks.find(t => t.id === (state.gpsCompareIdA || state.compareIdA));
-            const fileName = `nates-heartmatch-gps-${exportFileStem(gpsRef)}.png`;
+            const fileName = `heartmatch-gps-${exportFileStem(gpsRef)}.png`;
 
             try {
                 await renderGpsExportReportCanvas(false);
@@ -6783,9 +6824,9 @@
                 const ua = navigator.userAgent;
                 const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
                 if (isIOS) {
-                    text.textContent = 'Tap the Share button, then "Add to Home Screen" to install Nate\'s HeartMatch as an app.';
+                    text.textContent = 'Tap the Share button, then "Add to Home Screen" to install HeartMatch as an app.';
                 } else if (/Android/.test(ua)) {
-                    text.textContent = 'Open your browser menu and choose "Install" or "Add to Home screen" to use Nate\'s HeartMatch as an app.';
+                    text.textContent = 'Open your browser menu and choose "Install" or "Add to Home screen" to use HeartMatch as an app.';
                 } else {
                     return; // desktop browsers without install support: skip the hint
                 }

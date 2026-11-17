@@ -1,5 +1,5 @@
 {
-  "name": "Nate's HeartMatch",
+  "name": "HeartMatch",
   "short_name": "HeartMatch",
   "description": "Compare heart rate, GPS and elevation from multiple TCX/GPX recordings of the same workout.",
   "id": "./",
