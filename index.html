@@ -2078,8 +2078,12 @@
             let within10mCount = 0;
             let altSumDiff = 0, altCount = 0;
 
+            // Coverage: of the reference's GPS fixes taken while B was recording, how many B had a position for
+            // (B's GPS dropouts count as missing; starting later / stopping earlier does not)
+            let gpsCoverageCandidates = 0;
             for (const pa of gpsPtsA) {
                 const tA = pa.elapsedSec + offsetA;
+                if (bGpsTimes.length >= 2 && tA >= bGpsTimes[0] && tA <= bGpsTimes[bGpsTimes.length - 1]) gpsCoverageCandidates++;
                 const interpB = interpolateGpsB(tA);
                 if (interpB) {
                     const offsetM = haversineMeters(pa.lat, pa.lon, interpB.lat, interpB.lon);
@@ -2122,12 +2126,17 @@
             const gpsWithin5mPct = gpsCount > 0 ? +((within5mCount / gpsCount) * 100).toFixed(1) : null;
             const gpsWithin10mPct = gpsCount > 0 ? +((within10mCount / gpsCount) * 100).toFixed(1) : null;
 
-            let gpsMatchScore = null;
+            // GPS match = accuracy while B had a position x coverage (a second with no position scores zero),
+            // the same approach as the heart-rate score. Long dropouts cost more than short ones.
+            let gpsMatchScore = null, gpsAccuracyScore = null, gpsCoveragePct = null;
             if (meanGpsOffset != null && gpsWithin10mPct != null) {
                 const errComponent = Math.max(0, 100 - meanGpsOffset * 3.8);
                 const lockComponent = gpsWithin10mPct;
-                const dropoutPenalty = Math.min(18, (trackA.stats.dropoutCount + trackB.stats.dropoutCount) * 2.5);
-                gpsMatchScore = +Math.max(0, Math.min(100, errComponent * 0.55 + lockComponent * 0.45 - dropoutPenalty)).toFixed(1);
+                gpsAccuracyScore = Math.max(0, Math.min(100, errComponent * 0.55 + lockComponent * 0.45));
+                gpsCoveragePct = gpsCoverageCandidates > 0 ? Math.min(100, (gpsCount / gpsCoverageCandidates) * 100) : 100;
+                gpsMatchScore = +(gpsAccuracyScore * gpsCoveragePct / 100).toFixed(1);
+                gpsAccuracyScore = +gpsAccuracyScore.toFixed(1);
+                gpsCoveragePct = +gpsCoveragePct.toFixed(1);
             }
 
             const distDiffMeters = +(trackB.stats.distanceMeters - trackA.stats.distanceMeters).toFixed(0);
@@ -2138,6 +2147,8 @@
             return {
                 gpsCount,
                 gpsMatchScore,
+                gpsAccuracyScore,
+                gpsCoveragePct,
                 meanGpsOffset,
                 medianGpsOffset,
                 p95GpsOffset,
@@ -2156,6 +2167,15 @@
 
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
+            {
+                version: '2.0',
+                date: '17 Nov 2026',
+                changes: [
+                    'GPS score now counts dropouts by how long they last: GPS match = accuracy while the device had a position × coverage, replacing the old flat penalty per dropout. Long signal losses now cost far more than brief blips.',
+                    'GPS verdicts use the same four bands as heart rate (Excellent / Good / Fair / Poor) and say "but GPS dropouts" when a device missed more than 5% of the run, replacing guesses such as "urban / tree-cover drift".',
+                    'The GPS score shows the points lost to dropouts on the page and in exports.'
+                ]
+            },
             {
                 version: '1.9',
                 date: '17 Nov 2026',
@@ -2506,6 +2526,22 @@
             if (score >= 70) return { label: 'Fair agreement', short: 'Fair', cls: 'text-amber-500', color: '#f59e0b' };
             return { label: 'Poor agreement', short: 'Poor', cls: 'text-rose-500', color: '#f43f5e' };
         }
+        // GPS: same four bands, plus a note when the device had GPS dropouts (missed over 5% of the time)
+        function gpsHasDropouts(sim) {
+            return !!sim && sim.gpsCoveragePct != null && sim.gpsCoveragePct < 95;
+        }
+        function gpsVerdict(sim) {
+            return hrBand(sim.gpsMatchScore).label + (gpsHasDropouts(sim) ? ', but GPS dropouts' : '');
+        }
+        function gpsDropoutPointsLost(sim) {
+            return sim && sim.gpsAccuracyScore != null ? +Math.max(0, sim.gpsAccuracyScore - sim.gpsMatchScore).toFixed(1) : 0;
+        }
+        function gpsScorePartsText(sim) {
+            if (!sim || sim.gpsCoveragePct == null) return '';
+            const lost = gpsDropoutPointsLost(sim);
+            return lost > 0 ? `Accuracy ${sim.gpsAccuracyScore}% · Dropouts −${lost} pts (${sim.gpsCoveragePct}% coverage)` : `Accuracy ${sim.gpsAccuracyScore}% · No dropouts`;
+        }
+
         // Verdict wording: the band, plus a note when the device had heart-rate dropouts
         function hrVerdict(sim) {
             return hrBand(sim.matchScore).label + (hrHasDropouts(sim) ? ', but HR dropouts' : '');
@@ -3048,7 +3084,9 @@
                     const totalChalDropSec = +validGpsComps.reduce((s, c) => s + c.challenger.stats.totalDropoutSec, 0).toFixed(1);
 
                     elGpsMatch.textContent = `${avgGpsScore}%`;
-                    elGpsWithin5.textContent = `Avg Within 5m: ${avgGpsW5}%`;
+                    elGpsMatch.className = `text-sm font-bold font-mono mt-0.5 ${hrBand(avgGpsScore).cls}`;
+                    const avgGpsLost = +(validGpsComps.reduce((s, c) => s + gpsDropoutPointsLost(c.sim), 0) / gCount).toFixed(1);
+                    elGpsWithin5.textContent = `${hrBand(avgGpsScore).label} · ${avgGpsLost > 0 ? `avg −${avgGpsLost} pts dropouts` : 'no dropouts'}`;
                     elGpsMean.textContent = `±${avgGpsMean} m`;
                     elGpsMax.textContent = `Worst drift: ${worstGpsMax} m`;
                     elGpsDistCmp.textContent = `Ref: ${(gpsTrkA.stats.distanceMeters / 1000).toFixed(2)} km`;
@@ -3063,8 +3101,8 @@
 
                 const sortedGps = [...validGpsComps].sort((a, b) => (b.sim.gpsMatchScore || 0) - (a.sim.gpsMatchScore || 0));
                 gpsRefBody.innerHTML = sortedGps.map(({ challenger, sim }) => {
-                    const gCls = sim.gpsMatchScore >= 90 ? 'text-emerald-500' : sim.gpsMatchScore >= 75 ? 'text-amber-500' : 'text-rose-500';
-                    const gVerdict = sim.gpsMatchScore >= 90 ? 'Precision Lock' : sim.gpsMatchScore >= 75 ? 'Moderate Drift' : 'Multipath Drift';
+                    const gCls = hrBand(sim.gpsMatchScore).cls;
+                    const gVerdict = hrBand(sim.gpsMatchScore).short + (gpsHasDropouts(sim) ? ' · GPS dropouts' : '');
                     const dSign = sim.distDiffMeters > 0 ? '+' : '';
                     return `
                         <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
@@ -3072,7 +3110,7 @@
                                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${challenger.color}"></span>
                                 <span class="truncate max-w-[130px]">${escapeHtml(challenger.name)}</span>
                             </td>
-                            <td class="py-2 px-2 font-bold ${gCls}">${sim.gpsMatchScore}%</td>
+                            <td class="py-2 px-2 font-bold ${gCls}">${sim.gpsMatchScore}%${sim.gpsCoveragePct != null ? `<div class="text-[10px] font-normal text-slate-400 whitespace-nowrap">${gpsDropoutPointsLost(sim) > 0 ? `−${gpsDropoutPointsLost(sim)} pts dropouts` : 'no dropouts'}</div>` : ''}</td>
                             <td class="py-2 px-2 text-sky-400">±${sim.meanGpsOffset}m <span class="text-slate-400">/ ±${sim.medianGpsOffset}m</span></td>
                             <td class="py-2 px-2">${sim.gpsWithin5mPct}% / ${sim.gpsWithin10mPct}%</td>
                             <td class="py-2 px-2 text-amber-400">${sim.maxGpsOffset}m <span class="text-slate-400">/ ${sim.p95GpsOffset}m</span></td>
@@ -3138,7 +3176,10 @@
 
             if (elGpsMatch && gpsSim && gpsTrkA && gpsTrkB) {
                 elGpsMatch.textContent = gpsSim.gpsMatchScore != null ? `${gpsSim.gpsMatchScore}%` : '—';
-                elGpsWithin5.textContent = gpsSim.gpsWithin5mPct != null ? `Within 5m: ${gpsSim.gpsWithin5mPct}%` : 'Within 5m: —';
+                elGpsMatch.className = `text-sm font-bold font-mono mt-0.5 ${gpsSim.gpsMatchScore != null ? hrBand(gpsSim.gpsMatchScore).cls : 'text-slate-400'}`;
+                elGpsWithin5.textContent = gpsSim.gpsMatchScore != null
+                    ? `${hrBand(gpsSim.gpsMatchScore).label} · ${gpsDropoutPointsLost(gpsSim) > 0 ? `dropouts −${gpsDropoutPointsLost(gpsSim)} pts` : 'no dropouts'}`
+                    : 'Within 5m: —';
                 elGpsMean.textContent = gpsSim.meanGpsOffset != null ? `±${gpsSim.meanGpsOffset} m` : '—';
                 elGpsMax.textContent = gpsSim.maxGpsOffset != null ? `Max drift: ${gpsSim.maxGpsOffset} m` : 'Max drift: —';
                 elGpsDistCmp.textContent = `${(gpsTrkA.stats.distanceMeters / 1000).toFixed(2)} vs ${(gpsTrkB.stats.distanceMeters / 1000).toFixed(2)} km`;
@@ -6046,7 +6087,7 @@
                     ? +(validGpsComps.reduce((s, c) => s + c.sim.gpsMatchScore, 0) / validGpsComps.length).toFixed(1)
                     : 0;
                 const fullVerdictLabel = `AVG GPS MATCH ACROSS ${validGpsComps.length} CHALLENGER${validGpsComps.length === 1 ? '' : 'S'}: ${avgGpsScore}%`;
-                const verdictColor = avgGpsScore >= 90 ? '#10b981' : avgGpsScore >= 75 ? '#f59e0b' : '#f43f5e';
+                const verdictColor = hrBand(avgGpsScore).color;
 
                 ctx.font = 'bold 16px JetBrains Mono, monospace';
                 const verdictTextW = ctx.measureText(fullVerdictLabel).width;
@@ -6109,8 +6150,8 @@
                     ctx.font = 'bold 15px Inter, system-ui, sans-serif';
                     ctx.fillText(fitTextWithEllipsis(ctx, challenger.name, cols[0].w - 36), 120, textY);
 
-                    const gColor = gSim.gpsMatchScore >= 90 ? '#10b981' : gSim.gpsMatchScore >= 75 ? '#f59e0b' : '#f43f5e';
-                    const gVerdict = gSim.gpsMatchScore >= 90 ? 'PRECISION LOCK' : gSim.gpsMatchScore >= 75 ? 'MODERATE DRIFT' : 'MULTIPATH DRIFT';
+                    const gColor = hrBand(gSim.gpsMatchScore).color;
+                    const gVerdict = hrBand(gSim.gpsMatchScore).short.toUpperCase() + (gpsHasDropouts(gSim) ? ' · GPS DROPOUTS' : '');
                     ctx.fillStyle = gColor;
                     ctx.font = 'bold 16px JetBrains Mono, monospace';
                     ctx.fillText(`${gSim.gpsMatchScore}%`, cols[1].x, textY);
@@ -6143,14 +6184,11 @@
                 : 'GPS SPATIAL ACCURACY & DROPOUT SUMMARY';
 
             if (sim && sim.gpsMatchScore != null) {
-                const verdict = sim.gpsMatchScore >= 90
-                    ? 'HIGH PRECISION DUAL-TRACK LOCK'
-                    : sim.gpsMatchScore >= 75
-                    ? 'MODERATE URBAN / TREE-COVER DRIFT'
-                    : 'SIGNIFICANT MULTIPATH / DROPOUT DIVERGENCE';
-
-                const fullVerdictLabel = `VERDICT: ${verdict} (${sim.gpsCount.toLocaleString()} SYNCED FIXES)`;
-                const verdictColor = sim.gpsMatchScore >= 90 ? '#10b981' : sim.gpsMatchScore >= 75 ? '#f59e0b' : '#f43f5e';
+                const verdict = gpsVerdict(sim).toUpperCase();
+                const fullVerdictLabel = gpsHasDropouts(sim)
+                    ? `VERDICT: ${verdict} (${sim.gpsCoveragePct}% COVERAGE)`
+                    : `VERDICT: ${verdict} (${sim.gpsCount.toLocaleString()} SYNCED FIXES)`;
+                const verdictColor = hrBand(sim.gpsMatchScore).color;
 
                 // Measure right-aligned verdict badge first so left title never overlaps with it
                 ctx.font = 'bold 16px JetBrains Mono, monospace';
@@ -6184,7 +6222,7 @@
                 const totalDropSecB = trkB ? trkB.stats.totalDropoutSec : 0;
 
                 const kpis = [
-                    { label: 'OVERALL GPS MATCH', val: `${sim.gpsMatchScore}%`, sub: 'Spatial Closeness Index', color: '#10b981' },
+                    { label: 'OVERALL GPS MATCH', val: `${sim.gpsMatchScore}%`, sub: sim.gpsCoveragePct != null ? (gpsDropoutPointsLost(sim) > 0 ? `Accuracy ${sim.gpsAccuracyScore}% · Dropouts −${gpsDropoutPointsLost(sim)} pts` : `Accuracy ${sim.gpsAccuracyScore}% · No dropouts`) : 'Spatial Closeness Index', color: hrBand(sim.gpsMatchScore).color },
                     { label: 'MEAN SPATIAL OFFSET', val: `±${sim.meanGpsOffset} m`, sub: `Median: ±${sim.medianGpsOffset} m`, color: '#0ea5e9' },
                     { label: 'WITHIN 5m / 10m LOCK', val: `${sim.gpsWithin5mPct}%`, sub: `Within 10m: ${sim.gpsWithin10mPct}%`, color: '#6366f1' },
                     { label: 'MAX / P95 GPS DRIFT', val: `${sim.maxGpsOffset} m`, sub: `95th Pct: ${sim.p95GpsOffset} m`, color: '#f59e0b' },
