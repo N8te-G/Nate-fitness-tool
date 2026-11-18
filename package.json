@@ -1,7 +1,7 @@
 {
   "name": "nate-fitness-tool",
   "private": true,
-  "description": "Build tooling for HeartMatch (the app itself is plain HTML).",
+  "description": "Build tooling for TrueTrace (the app itself is plain HTML).",
   "scripts": {
     "build:css": "tailwindcss -i ./src/tailwind.css -o ./vendor/tailwind.css --minify && node scripts/stamp-css.js",
     "build:golden": "node scripts/build-golden-master.js"

@@ -1,10 +1,10 @@
-// Service worker for HeartMatch: lets the installed app open offline.
+// Service worker for TrueTrace: lets the installed app open offline.
 // - The app's own files (page, stylesheet, libraries, icons) are network-first: when online you always
 //   get the current version, so the page and its stylesheet can never get out of step after an update.
 //   Saved copies are only used when offline.
 // - Web fonts are cache-first (they never change).
 // - Map tiles and anything else are left to the network.
-const CACHE = 'nft-v39';
+const CACHE = 'nft-v40';
 
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './icon.svg',
     './vendor/tailwind.css', './vendor/chart.umd.min.js',
