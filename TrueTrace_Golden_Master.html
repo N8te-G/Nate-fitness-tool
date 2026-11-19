@@ -2866,6 +2866,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.5',
+                date: '19 Nov 2026',
+                changes: [
+                    'Exported images now carry a faint truetrace.fit watermark inside the heart-rate chart and on the GPS map, so the address stays with the picture even when it\'s cropped.'
+                ]
+            },
+            {
                 version: '2.4',
                 date: '19 Nov 2026',
                 changes: [
@@ -3291,6 +3298,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
             ctx.font = '700 24px Inter, system-ui, sans-serif';
             ctx.fillStyle = brandGradient(ctx, x0 + leadW, urlW, isDark);
             ctx.fillText(APP_URL_LABEL, x0 + leadW, y);
+            ctx.restore();
+        }
+
+        // Faint "truetrace.fit" watermark inside the chart / map, so the address stays with a cropped screenshot.
+        // (x, y) is the right end of the text's baseline when align is 'right', the left end when 'left'.
+        function drawExportWatermark(ctx, x, y, isDark, align = 'right') {
+            ctx.save();
+            ctx.globalAlpha = isDark ? 0.22 : 0.18;
+            ctx.textAlign = align;
+            ctx.font = '800 56px Inter, system-ui, sans-serif';
+            const w = ctx.measureText(APP_URL_LABEL).width;
+            ctx.fillStyle = brandGradient(ctx, align === 'right' ? x - w : x, w, isDark);
+            ctx.fillText(APP_URL_LABEL, x, y);
             ctx.restore();
         }
 
@@ -5412,6 +5432,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 }
             }
 
+            drawExportWatermark(ctx, plotRight - 20, hrPlotTop + 62, isDark);
+
             // 6. Statistical Match & Accuracy Footer Section
             const footerTop = chartCardTop + chartCardHeight + 18;
             const footerH = H - footerTop - 45;
@@ -6478,6 +6500,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 }
             }
             ctx.restore();
+            drawExportWatermark(ctx, 60 + 40, mapCardTop + 80, isDark, 'left');
 
             // 4B. Render the Row of 4 Zoomed-In "Biggest Drift Hotspot" Sub-Maps under the Main Map
             if (showZoomBoxes) {
