@@ -2,7 +2,8 @@
 
 Compare heart rate, GPS tracks and elevation from several TCX/GPX recordings of the same workout.
 
-**Open the app:** https://n8te-g.github.io/Nate-fitness-tool/
+**Open the app:** https://truetrace.fit/  
+(also still reachable at https://n8te-g.github.io/Nate-fitness-tool/, which redirects there)
 
 ## Install on Android
 
