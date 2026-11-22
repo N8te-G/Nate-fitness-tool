@@ -2181,6 +2181,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.9',
+                date: '22 Nov 2026',
+                changes: [
+                    'The truetrace.fit watermark on exports is now about twice as visible, has the TrueTrace logo, and moves to whichever corner of the chart or map is emptiest, so heart-rate lines and routes no longer cover it.'
+                ]
+            },
+            {
                 version: '2.8',
                 date: '22 Nov 2026',
                 changes: [
@@ -2637,16 +2644,40 @@
             ctx.restore();
         }
 
-        // Faint "truetrace.fit" watermark inside the chart / map, so the address stays with a cropped screenshot.
-        // (x, y) is the right end of the text's baseline when align is 'right', the left end when 'left'.
-        function drawExportWatermark(ctx, x, y, isDark, align = 'right') {
+        // "truetrace.fit" watermark inside the chart / map, so the address stays with a cropped screenshot.
+        // It goes in whichever corner of `area` ({x, y, w, h}) has the least drawn on it (fewest coloured
+        // data / track pixels), so lines and routes never hide it. `skip` lists corners to avoid (e.g. 'tr').
+        function drawExportWatermark(ctx, area, isDark, skip = []) {
+            const pad = 18;
             ctx.save();
-            ctx.globalAlpha = isDark ? 0.22 : 0.18;
-            ctx.textAlign = align;
-            ctx.font = '800 56px Inter, system-ui, sans-serif';
-            const w = ctx.measureText(APP_URL_LABEL).width;
-            ctx.fillStyle = brandGradient(ctx, align === 'right' ? x - w : x, w, isDark);
-            ctx.fillText(APP_URL_LABEL, x, y);
+            ctx.font = '800 34px Inter, system-ui, sans-serif';
+            const textW = ctx.measureText(APP_URL_LABEL).width;
+            const logo = 38, gap = 10;
+            const boxW = Math.round(logo + gap + textW);
+            const boxH = 46;
+            const spots = {
+                tl: [area.x + pad, area.y + pad], tr: [area.x + area.w - pad - boxW, area.y + pad],
+                bl: [area.x + pad, area.y + area.h - pad - boxH], br: [area.x + area.w - pad - boxW, area.y + area.h - pad - boxH]
+            };
+            // Busyness = share of strongly coloured pixels under the box (data lines / tracks are saturated)
+            const busy = ([bx, by]) => {
+                try {
+                    const t = ctx.getTransform();
+                    const d = ctx.getImageData(Math.round(bx * t.a + t.e), Math.round(by * t.d + t.f), Math.round(boxW * t.a), Math.round(boxH * t.d)).data;
+                    let n = 0, hit = 0;
+                    for (let k = 0; k < d.length; k += 16) { n++; const mx = Math.max(d[k], d[k + 1], d[k + 2]), mn = Math.min(d[k], d[k + 1], d[k + 2]); if (mx - mn > 90) hit++; }
+                    return n ? hit / n : 0;
+                } catch (_) { return 0; } // canvas not readable: fall back to the first allowed corner
+            };
+            const order = ['tl', 'tr', 'bl', 'br'].filter(c => !skip.includes(c));
+            let best = order[0], bestBusy = Infinity;
+            for (const c of order) { const b = busy(spots[c]); if (b < bestBusy - 0.005) { best = c; bestBusy = b; } }
+            const [bx, by] = spots[best];
+            ctx.globalAlpha = isDark ? 0.5 : 0.45;
+            drawAppLogo(ctx, bx, by + (boxH - logo) / 2, logo, 9);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = brandGradient(ctx, bx + logo + gap, textW, isDark);
+            ctx.fillText(APP_URL_LABEL, bx + logo + gap, by + boxH / 2 + 12);
             ctx.restore();
         }
 
@@ -4768,7 +4799,7 @@
                 }
             }
 
-            drawExportWatermark(ctx, plotRight - 20, hrPlotTop + 62, isDark);
+            drawExportWatermark(ctx, { x: plotLeft, y: hrPlotTop, w: plotRight - plotLeft, h: hrPlotBottom - hrPlotTop }, isDark);
 
             // 6. Statistical Match & Accuracy Footer Section
             const footerTop = chartCardTop + chartCardHeight + 18;
@@ -5856,7 +5887,8 @@
                 }
             }
             ctx.restore();
-            drawExportWatermark(ctx, 60 + 40, mapCardTop + 80, isDark, 'left');
+            // avoid the compass (top right) and the scale bar / map credits along the bottom edge
+            drawExportWatermark(ctx, { x: 60, y: mapCardTop, w: mapCardW, h: mapCardH - 50 }, isDark, ['tr']);
 
             // 4B. Render the Row of 4 Zoomed-In "Biggest Drift Hotspot" Sub-Maps under the Main Map
             if (showZoomBoxes) {
