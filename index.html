@@ -2181,6 +2181,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.8',
+                date: '22 Nov 2026',
+                changes: [
+                    'GPS export: each device card now shows its distance difference from the reference (e.g. "−11 m (−0.16%) vs ref"), coloured green within 1%, amber within 3%, red beyond.'
+                ]
+            },
+            {
                 version: '2.7',
                 date: '20 Nov 2026',
                 changes: [
@@ -5512,15 +5519,35 @@
                 const dispName = fitTextWithEllipsis(ctx, prefixTag + trk.name, cardW - 52);
                 ctx.fillText(dispName, cx + 38, legendTop + 44);
 
-                // Line 1: Distance & GPS Points
-                ctx.fillStyle = textSub;
+                // Line 1: Distance, its difference from the GPS reference (highlighted), then GPS fixes & lock
+                const lineX = cx + 38, lineMaxW = cardW - 52;
+                let lx = lineX;
                 ctx.font = '500 15px JetBrains Mono, monospace';
-                const line1Str = fitTextWithEllipsis(
-                    ctx,
-                    `Dist: ${(trk.stats.distanceMeters / 1000).toFixed(2)} km | Fixes: ${trk.stats.validGpsCount.toLocaleString()} | Lock: ${trk.stats.gpsIntegrityPct}%`,
-                    cardW - 52
-                );
-                ctx.fillText(line1Str, cx + 38, legendTop + 74);
+                ctx.fillStyle = textSub;
+                const distStr = `Dist: ${(trk.stats.distanceMeters / 1000).toFixed(2)} km `;
+                ctx.fillText(distStr, lx, legendTop + 74);
+                lx += ctx.measureText(distStr).width;
+                const isRefCard = trkA && trk.id === trkA.id;
+                const refDist = trkA ? trkA.stats.distanceMeters : 0;
+                if (isRefCard) {
+                    const tag = '· reference ';
+                    ctx.fillText(tag, lx, legendTop + 74);
+                    lx += ctx.measureText(tag).width;
+                } else if (trkA && refDist > 0) {
+                    const dM = Math.round(trk.stats.distanceMeters - refDist);
+                    const dPct = dM / refDist * 100; // same rounding as the "Total Distance Delta" card
+                    const sign = v => v > 0 ? '+' : v < 0 ? '−' : '±';
+                    const deltaStr = `${sign(dM)}${Math.abs(dM)} m (${sign(dM)}${Math.abs(dPct).toFixed(2)}%) vs ref `;
+                    ctx.font = 'bold 15px JetBrains Mono, monospace';
+                    ctx.fillStyle = Math.abs(dPct) <= 1 ? '#10b981' : Math.abs(dPct) <= 3 ? '#f59e0b' : '#f43f5e';
+                    const shown = fitTextWithEllipsis(ctx, deltaStr, lineMaxW - (lx - lineX));
+                    ctx.fillText(shown, lx, legendTop + 74);
+                    lx += ctx.measureText(shown).width;
+                    ctx.font = '500 15px JetBrains Mono, monospace';
+                    ctx.fillStyle = textSub;
+                }
+                const restW = lineMaxW - (lx - lineX);
+                if (restW > 40) ctx.fillText(fitTextWithEllipsis(ctx, `| Fixes: ${trk.stats.validGpsCount.toLocaleString()} | Lock: ${trk.stats.gpsIntegrityPct}%`, restW), lx, legendTop + 74);
 
                 // Line 2: GPS Dropouts Callout
                 const hasDrops = trk.stats.dropoutCount > 0;
