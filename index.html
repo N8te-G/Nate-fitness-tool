@@ -2190,6 +2190,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.14',
+                date: '23 Nov 2026',
+                changes: [
+                    'The Overall Match card and the exports now show how many heart-rate dropouts the device had, e.g. "Accuracy 90.4% · 3 dropouts −8.8 pts".'
+                ]
+            },
+            {
                 version: '2.13',
                 date: '23 Nov 2026',
                 changes: [
@@ -2460,6 +2467,7 @@
             // Coverage: of the reference readings taken while Track B was recording, how many B had a reading for
             // (B's dropouts longer than HR_PAIR_MAX_GAP_SEC count as missing; a later start / earlier stop does not)
             let coverageCandidates = 0;
+            const hrGapStarts = new Set(); // B's HR dropouts (gaps > HR_PAIR_MAX_GAP_SEC) during the comparison
             const bStart = bTimes[0], bEnd = bTimes[bTimes.length - 1];
             for (const pA of ptsA) {
                 const tA = pA.elapsedSec + offsetA;
@@ -2477,6 +2485,12 @@
                 if (xRange && !(pairX(pr) >= xRange.min && pairX(pr) <= xRange.max)) continue;
                 coverageCandidates++;
                 if (hrB != null) pairs.push(pr);
+                else {
+                    // which of B's gaps this falls in (distinct gaps = number of dropouts)
+                    let lo = 0, hi = bTimes.length - 1;
+                    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (bTimes[mid] <= tA) lo = mid; else hi = mid; }
+                    hrGapStarts.add(lo);
+                }
             }
 
             if (pairs.length < 3) return null;
@@ -2531,6 +2545,7 @@
             return {
                 matchScore: +matchScore.toFixed(1),
                 accuracyScore: +accuracyScore.toFixed(1),
+                hrDropoutCount: hrGapStarts.size,
                 coveragePct: +coveragePct.toFixed(1),
                 correlation: +r.toFixed(3),
                 mae: +mae.toFixed(2),
@@ -2545,11 +2560,15 @@
         }
 
         // "Accuracy 90.4% · Coverage 88.9%" breakdown of the overall match score (null for GPS-only comparisons)
+        // "3 dropouts" / "1 dropout"
+        function dropoutCountText(n) {
+            return `${n} dropout${n === 1 ? '' : 's'}`;
+        }
         function scorePartsText(sim) {
             if (!sim || sim.coveragePct == null) return '';
-            const lost = dropoutPointsLost(sim);
-            return lost > 0
-                ? `Accuracy ${sim.accuracyScore}% · Dropouts −${lost} pts (${sim.coveragePct}% coverage)`
+            const lost = dropoutPointsLost(sim), n = sim.hrDropoutCount || 0;
+            return n > 0
+                ? `Accuracy ${sim.accuracyScore}% · ${dropoutCountText(n)} −${lost} pts (${sim.coveragePct}% coverage)`
                 : `Accuracy ${sim.accuracyScore}% · No dropouts`;
         }
         // Percentage points of the overall score lost because the device had no reading
@@ -2560,8 +2579,8 @@
         // Short form for table cells: "−13.0 pts dropouts" or "no dropouts"
         function dropoutShortText(sim) {
             if (!sim || sim.coveragePct == null) return '';
-            const lost = dropoutPointsLost(sim);
-            return lost > 0 ? `−${lost} pts dropouts` : 'no dropouts';
+            const lost = dropoutPointsLost(sim), n = sim.hrDropoutCount || 0;
+            return n > 0 ? `${dropoutCountText(n)} −${lost} pts` : 'no dropouts';
         }
         // Workout date & start time from the files (the reference device's clock), for the export headers
         function workoutDateLabel(preferred) {
@@ -3355,8 +3374,9 @@
                     const avgAcc = +(hrParts.reduce((s, c) => s + c.sim.accuracyScore, 0) / hrParts.length).toFixed(1);
                     const avgCov = +(hrParts.reduce((s, c) => s + c.sim.coveragePct, 0) / hrParts.length).toFixed(1);
                     const avgLost = +(hrParts.reduce((s, c) => s + dropoutPointsLost(c.sim), 0) / hrParts.length).toFixed(1);
-                    elScoreParts.textContent = avgLost > 0
-                        ? `Avg accuracy ${avgAcc}% · Dropouts −${avgLost} pts (${avgCov}% coverage)`
+                    const totalDrops = hrParts.reduce((s, c) => s + (c.sim.hrDropoutCount || 0), 0);
+                    elScoreParts.textContent = totalDrops > 0
+                        ? `Avg accuracy ${avgAcc}% · ${dropoutCountText(totalDrops)} −${avgLost} pts avg (${avgCov}% coverage)`
                         : `Avg accuracy ${avgAcc}% · No dropouts`;
                 }
                 const avgCorr = +(refComparisons.reduce((s, c) => s + c.sim.correlation, 0) / nChal).toFixed(3);
@@ -5145,7 +5165,7 @@
                 ctx.fillText(fitTextWithEllipsis(ctx, pairTitle, maxTitleWidth), 92, footerTop + 43);
 
                 const kpis = [
-                    { label: 'OVERALL MATCH SCORE', val: `${sim.matchScore}%`, sub: sim.coveragePct != null ? (dropoutPointsLost(sim) > 0 ? `Accuracy ${sim.accuracyScore}% · Dropouts −${dropoutPointsLost(sim)} pts` : `Accuracy ${sim.accuracyScore}% · No dropouts`) : 'Composite Accuracy Index', color: hrBand(sim.matchScore).color },
+                    { label: 'OVERALL MATCH SCORE', val: `${sim.matchScore}%`, sub: sim.coveragePct != null ? ((sim.hrDropoutCount || 0) > 0 ? `Accuracy ${sim.accuracyScore}% · ${dropoutCountText(sim.hrDropoutCount)} −${dropoutPointsLost(sim)} pts` : `Accuracy ${sim.accuracyScore}% · No dropouts`) : 'Composite Accuracy Index', color: hrBand(sim.matchScore).color },
                     { label: 'PEARSON CORRELATION', val: `r = ${sim.correlation.toFixed(3)}`, sub: '1.000 = Identical Trend', color: '#6366f1' },
                     { label: 'MEAN ABS ERROR (MAE)', val: `±${sim.mae} BPM`, sub: `RMSE: ${sim.rmse} BPM`, color: '#f59e0b' },
                     { label: 'WITHIN ±2 BPM', val: `${sim.within2Pct}%`, sub: `Tight Sensor Lock`, color: '#0ea5e9' },
