@@ -2190,6 +2190,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.12',
+                date: '23 Nov 2026',
+                changes: [
+                    'Heart-rate export: heart-rate dropouts are shaded as a light, see-through column in the device\'s colour, while its line stays continuous.'
+                ]
+            },
+            {
                 version: '2.11',
                 date: '23 Nov 2026',
                 changes: [
@@ -4739,7 +4746,7 @@
                     const pt = trk.points[i];
                     const xVal = pointX(trk, pt);
                     if (!inExportRange(xVal)) continue;
-                    pts.push({ x: xVal, y: smoothedHR[i] });
+                    pts.push({ x: xVal, y: smoothedHR[i], t: pt.elapsedSec });
                 }
                 return { trk, pts };
             }).filter(s => s.pts.length > 0);
@@ -4821,6 +4828,23 @@
                         ctx.fillText(labelStr, px, hrPlotBottom + 26);
                     }
                 }
+
+                // Heart-rate dropouts: a light, see-through column in each device's colour wherever it had no
+                // reading for more than HR_PAIR_MAX_GAP_SEC (the trace line itself stays continuous)
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(plotLeft, hrPlotTop, plotW, hrPlotH);
+                ctx.clip();
+                allPlottedSeries.forEach(s => {
+                    const { gapBands } = findHrGaps(s.pts);
+                    gapBands.forEach(b => {
+                        const x1 = mapX(Math.min(b.x1, b.x2)), x2 = mapX(Math.max(b.x1, b.x2));
+                        if (x2 - x1 < 1) return;
+                        ctx.fillStyle = s.trk.color + (isDark ? '30' : '26');
+                        ctx.fillRect(x1, hrPlotTop, x2 - x1, hrPlotH);
+                    });
+                });
+                ctx.restore();
 
                 // Plot every data point for each visible track
                 ctx.save();
