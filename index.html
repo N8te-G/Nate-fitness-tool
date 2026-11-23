@@ -37,7 +37,7 @@
     <title>TrueTrace — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=0a4f4f7082">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=d8ab82de74">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -894,6 +894,8 @@
                 </button>
             </div>
 
+            <div data-export-offset-warning class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/40"></div>
+
             <!-- Export Customization Toolbar -->
             <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
                 <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto lg:flex-1 min-w-0">
@@ -991,6 +993,8 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
+
+            <div data-export-offset-warning class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/40"></div>
 
             <!-- GPS Export Customization Toolbar -->
             <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
@@ -2186,6 +2190,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.11',
+                date: '23 Nov 2026',
+                changes: [
+                    'Sync safeguard: if a hand-set offset (10 s or more from the clock sync) makes a device line up much worse, a warning appears under its slider and at the top of the export windows, with a one-tap "Re-sync by clock". GPS drift is compared when both devices have GPS, heart rate otherwise.'
+                ]
+            },
+            {
                 version: '2.10',
                 date: '23 Nov 2026',
                 changes: [
@@ -2828,6 +2839,62 @@
             }, 120);
         }
 
+        // Safeguard: has a hand-set offset made this device line up much worse than the clock sync did?
+        // GPS drift is compared when both devices have GPS, heart rate otherwise. Small nudges (< 10 s) never warn.
+        function offsetSanityCheck(trk) {
+            const ref = state.tracks.find(t => t.id === state.referenceTrackId) || state.tracks[0];
+            if (!trk || !ref || trk.id === ref.id || !Number.isFinite(ref.startTimeMs) || !Number.isFinite(trk.startTimeMs)) return null;
+            const clockOff = computeGpsClockOffsetSec(ref, trk);
+            const nowOff = trk.timeOffsetSec || 0;
+            if (Math.abs(nowOff - clockOff) < 10) return null;
+            const key = `${ref.id}|${trk.id}|${nowOff}|${ref.timeOffsetSec || 0}`;
+            if (trk._sanityKey === key) return trk._sanity;
+            const at = off => Object.assign(Object.create(Object.getPrototypeOf(trk)), trk, { timeOffsetSec: off, offsetSec: off });
+            let result = null;
+            if (trackHasGps(ref) && trackHasGps(trk)) {
+                const now = computePairwiseGpsStats(ref, at(nowOff)), clock = computePairwiseGpsStats(ref, at(clockOff));
+                if (now && clock && now.meanGpsOffset != null && clock.meanGpsOffset != null &&
+                    now.meanGpsOffset > clock.meanGpsOffset * 2 && now.meanGpsOffset - clock.meanGpsOffset > 15) {
+                    result = { kind: 'gps', now: Math.round(now.meanGpsOffset), clock: Math.round(clock.meanGpsOffset), nowOff, clockOff, unit: 'm' };
+                }
+            } else {
+                const now = computePairSimilarity(ref, at(nowOff)), clock = computePairSimilarity(ref, at(clockOff));
+                if (now && clock && now.mae > clock.mae * 1.5 && now.mae - clock.mae > 3) {
+                    result = { kind: 'hr', now: +now.mae.toFixed(1), clock: +clock.mae.toFixed(1), nowOff, clockOff, unit: 'bpm' };
+                }
+            }
+            trk._sanityKey = key;
+            trk._sanity = result;
+            return result;
+        }
+        function offsetWarningText(trk, w) {
+            const what = w.kind === 'gps' ? 'GPS tracks' : 'heart rates';
+            return `This ${w.nowOff >= 0 ? '+' : ''}${w.nowOff}s offset puts the ${what} ${w.now} ${w.unit} apart on average (${w.clock} ${w.unit} when synced by clock, ${w.clockOff >= 0 ? '+' : ''}${w.clockOff}s). Was it moved by accident?`;
+        }
+        // Export windows: one banner listing any devices with a suspicious offset
+        function renderExportOffsetWarnings() {
+            const items = state.tracks.filter(t => t.visible).map(t => ({ t, w: offsetSanityCheck(t) })).filter(x => x.w);
+            document.querySelectorAll('[data-export-offset-warning]').forEach(box => {
+                box.classList.toggle('hidden', !items.length);
+                if (!items.length) return;
+                box.innerHTML = `
+                    <div class="flex items-start gap-2.5">
+                        <span class="shrink-0 text-amber-500 text-base leading-none mt-0.5">⚠</span>
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <p class="text-xs font-semibold text-amber-700 dark:text-amber-300">Check the sync before exporting</p>
+                            ${items.map(({ t, w }) => `<p class="text-xs text-amber-800/90 dark:text-amber-200/90"><strong>${escapeHtml(t.name.split(' (')[0])}:</strong> ${escapeHtml(offsetWarningText(t, w))}</p>`).join('')}
+                        </div>
+                        <button type="button" data-fix-all-offsets class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 cursor-pointer">Re-sync by clock</button>
+                    </div>`;
+                box.querySelector('[data-fix-all-offsets]').addEventListener('click', () => {
+                    items.forEach(({ t, w }) => setTrackOffsetSec(t.id, w.clockOff, 'gps'));
+                    renderExportOffsetWarnings();
+                    if (!document.getElementById('exportModal')?.classList.contains('hidden')) renderHrExportReportCanvas();
+                    if (!document.getElementById('gpsExportModal')?.classList.contains('hidden')) renderGpsExportReportCanvas(false);
+                });
+            });
+        }
+
         function renderFileList() {
             const container = document.getElementById('fileListContainer');
             const badge = document.getElementById('fileCountBadge');
@@ -2939,6 +3006,14 @@
                             </span>
                             </div>
                             <div class="offset-slider-wrap"><input type="range" min="${sliderMin}" max="${sliderMax}" step="1" value="${offsetVal}" data-id="${trk.id}" class="offset-slider w-full cursor-pointer" style="--pct:${sliderPct}%" aria-label="Sync offset in seconds" /></div>
+                            ${(() => { const w = offsetSanityCheck(trk); return w ? `
+                            <div class="mt-1 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/40 flex items-start gap-2">
+                                <span class="shrink-0 text-amber-500 leading-none mt-0.5">⚠</span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[11px] text-amber-800 dark:text-amber-200">${escapeHtml(offsetWarningText(trk, w))}</p>
+                                    <button type="button" data-fix-offset="${trk.id}" data-clock-off="${w.clockOff}" class="mt-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white bg-amber-500 hover:bg-amber-600 cursor-pointer">Re-sync by clock (${w.clockOff >= 0 ? '+' : ''}${w.clockOff}s)</button>
+                                </div>
+                            </div>` : ''; })()}
                         </div>
 
                         <div class="flex flex-wrap items-center gap-1">
@@ -3056,6 +3131,10 @@
                     const val = parseInt(e.target.value, 10) || 0;
                     setTrackOffsetSec(e.target.dataset.id, val, 'manual');
                 });
+            });
+
+            container.querySelectorAll('[data-fix-offset]').forEach(btn => {
+                btn.addEventListener('click', () => setTrackOffsetSec(btn.dataset.fixOffset, parseInt(btn.dataset.clockOff, 10) || 0, 'gps'));
             });
 
             container.querySelectorAll('.step-sync-btn').forEach(btn => {
@@ -6884,6 +6963,7 @@
                         rangeSelect.value = w ? 'zoom' : 'full';
                     }
                     document.querySelectorAll('[data-workout-type]').forEach(o => { o.value = state.workoutType || ''; });
+                    renderExportOffsetWarnings();
                     exportModal.classList.remove('hidden');
                     renderHrExportReportCanvas();
                 });
@@ -6921,6 +7001,7 @@
                     const gpsModeSelect = document.getElementById('gpsExportCompareModeSelect');
                     if (gpsModeSelect) gpsModeSelect.value = state.comparisonMode;
                     document.querySelectorAll('[data-workout-type]').forEach(o => { o.value = state.workoutType || ''; });
+                    renderExportOffsetWarnings();
                     gpsExportModal.classList.remove('hidden');
                     renderGpsExportReportCanvas(false);
                 });
