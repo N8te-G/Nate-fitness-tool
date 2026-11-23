@@ -2879,6 +2879,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.13',
+                date: '23 Nov 2026',
+                changes: [
+                    'Cleaner GPS export map: the route only carries small dots and the dashed dropout lines. Every label sits off to the side with a pointer line to what it refers to.',
+                    'The biggest-drift spots are lettered A–D, with the same orange letter on the map callout and on its zoom box.',
+                    'Dropouts are numbered across all devices, with the same red "DROPOUT 1, 2…" label on the map and in the dropout log.'
+                ]
+            },
+            {
                 version: '2.12',
                 date: '23 Nov 2026',
                 changes: [
@@ -6125,6 +6134,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
             const visibleTracks = state.tracks.filter(t => t.visible);
             // GPS report only covers devices that recorded GPS (HR-only straps are left out)
             const activeTracks = gpsCapableTracks(visibleTracks.length > 0 ? visibleTracks : state.tracks);
+            // Dropouts are numbered 1, 2, 3… across all devices (same numbers on the map and in the log);
+            // drift hotspots use letters A–D (same letter on the map and on its zoom box)
+            const dropoutNo = new Map();
+            activeTracks.forEach(t => (t.dropouts || []).forEach(dr => dropoutNo.set(dr, dropoutNo.size + 1)));
+            const hsLetter = rank => 'ABCDEFGH'[rank - 1] || String(rank);
             const gpsRefId = state.gpsReferenceTrackId || state.gpsCompareIdA || state.compareIdA;
             const trkA = state.tracks.find(t => t.id === (isRefMode ? gpsRefId : (state.gpsCompareIdA || gpsRefId))) || activeTracks[0];
             const trkB = state.tracks.find(t => t.id === (state.gpsCompareIdB || state.compareIdB)) || activeTracks[1] || activeTracks[0];
@@ -6533,36 +6547,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     ctx.stroke();
                 });
 
-                // PASS 2: Plot Numbered Drift Hotspot Callout Badges (#1 - #4) on the Main Map
-                if (showZoomBoxes && hotspots.length > 0) {
-                    hotspots.forEach(hs => {
-                        const pos = projectLatLon(hs.midLat, hs.midLon);
-
-                        // Outer amber target halo
-                        ctx.beginPath();
-                        ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
-                        ctx.fill();
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = '#f59e0b';
-                        ctx.stroke();
-
-                        // Numbered badge circle
-                        ctx.beginPath();
-                        ctx.arc(pos.x, pos.y, 13, 0, Math.PI * 2);
-                        ctx.fillStyle = '#f59e0b';
-                        ctx.fill();
-                        ctx.lineWidth = 2.5;
-                        ctx.strokeStyle = '#0f172a';
-                        ctx.stroke();
-
-                        ctx.fillStyle = '#0f172a';
-                        ctx.font = 'bold 13px JetBrains Mono, monospace';
-                        ctx.textAlign = 'center';
-                        ctx.fillText(`#${hs.rank}`, pos.x, pos.y + 4.5);
-                    });
-                }
-
                 // PASS 3: Start & Finish Flags on primary track
                 const firstTrkPts = activeTracks[0].points.filter(p => p.lat != null && p.lon != null);
                 if (firstTrkPts.length > 1) {
@@ -6621,6 +6605,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
                 }
 
                 // PASS 4 (TOP LAYER): Render all GPS Dropout Dashes & Callout Badges last so they sit above all tracks
+                const mapCallouts = []; // labels placed off the route after all lines are drawn (dropouts + drift spots)
                 if (showDropouts) {
                     activeTracks.forEach(trk => {
                         if (!trk.dropouts || trk.dropouts.length === 0) return;
@@ -6662,19 +6647,120 @@ svg.leaflet-image-layer.leaflet-interactive path {
                             ctx.fillStyle = '#ef4444';
                             ctx.fill();
 
-                            const labelText = `DROPOUT #${dr.index} (${dr.durationSec}s)`;
-                            ctx.font = 'bold 13px JetBrains Mono, monospace';
-                            const tw = ctx.measureText(labelText).width;
-                            const lx = pStart.x + 18;
-                            const ly = pStart.y - 14;
-                            drawRoundedRect(ctx, lx, ly - 15, tw + 16, 24, 6);
-                            ctx.fillStyle = '#ef4444';
-                            ctx.fill();
-                            ctx.fillStyle = '#ffffff';
-                            ctx.textAlign = 'left';
-                            ctx.fillText(labelText, lx + 8, ly + 2);
+                            mapCallouts.push({ kind: 'dropout', text: `DROPOUT ${dropoutNo.get(dr) || dr.index} (${dr.durationSec}s)`, pStart, pEnd });
                         });
                     });
+
+                }
+
+                // PASS 5: Callouts. The route itself only carries small dots (drift spots) and the dashed dropout lines;
+                // every label sits off the route with a pointer line to what it refers to. Labels are placed so they
+                // cover as little of the route as possible and don't overlap each other or the map's edges.
+                if (showZoomBoxes && hotspots.length > 0) {
+                    hotspots.forEach(hs => {
+                        const pos = projectLatLon(hs.midLat, hs.midLon);
+                        mapCallouts.push({ kind: 'drift', letter: hsLetter(hs.rank), text: `${hs.offsetMeters.toFixed(1)} m`, pStart: pos, pEnd: pos });
+                    });
+                }
+                if (mapCallouts.length) {
+                    const mapL = 60 + 8, mapR = 60 + mapCardW - 8, mapT = mapCardTop + 8, mapB = mapCardTop + mapCardH - 50;
+                    const routePts = [];
+                    activeTracks.forEach(t => {
+                        const gp = t.points.filter(q => q.lat != null && q.lon != null);
+                        const step = Math.max(1, Math.floor(gp.length / 1500));
+                        for (let k = 0; k < gp.length; k += step) routePts.push(projectLatLon(gp[k].lat, gp[k].lon));
+                    });
+                    // Anchor = the dot each pointer line ends at (drift spot, or the middle of a dropout's dashed line)
+                    mapCallouts.forEach(c => { c.ax = (c.pStart.x + c.pEnd.x) / 2; c.ay = (c.pStart.y + c.pEnd.y) / 2; });
+                    ctx.save();
+                    mapCallouts.forEach(c => {
+                        ctx.font = c.kind === 'drift' ? 'bold 13px JetBrains Mono, monospace' : 'bold 13px JetBrains Mono, monospace';
+                        c.w = ctx.measureText(c.text).width + (c.kind === 'drift' ? 44 : 16);
+                        c.h = c.kind === 'drift' ? 28 : 24;
+                    });
+                    ctx.restore();
+                    const placed = [];
+                    // Drift callouts first (there are at most 4), then dropouts
+                    [...mapCallouts].sort((a, b) => (a.kind === 'drift' ? 0 : 1) - (b.kind === 'drift' ? 0 : 1)).forEach(c => {
+                        const { ax, ay, w, h } = c;
+                        let nx = -(c.pEnd.y - c.pStart.y), ny = c.pEnd.x - c.pStart.x;
+                        const nl = Math.hypot(nx, ny);
+                        if (nl < 4) {
+                            // a point (drift spot): use the route's direction there
+                            let near = null, nd = Infinity;
+                            routePts.forEach((q, k) => { const d = Math.hypot(q.x - ax, q.y - ay); if (d < nd) { nd = d; near = k; } });
+                            const q0 = routePts[Math.max(0, near - 3)], q1 = routePts[Math.min(routePts.length - 1, near + 3)];
+                            nx = -(q1.y - q0.y); ny = q1.x - q0.x;
+                        }
+                        const nn = Math.hypot(nx, ny) || 1; nx /= nn; ny /= nn;
+                        let best = null;
+                        for (const dist of [55, 85, 120, 160, 210]) {
+                            for (const [ux, uy] of [[nx, ny], [-nx, -ny], [nx * 0.7 + ny * 0.7, ny * 0.7 - nx * 0.7], [-nx * 0.7 - ny * 0.7, -ny * 0.7 + nx * 0.7], [nx * 0.7 - ny * 0.7, ny * 0.7 + nx * 0.7], [-nx * 0.7 + ny * 0.7, -ny * 0.7 - nx * 0.7]]) {
+                                const r = { x: ax + ux * dist - w / 2, y: ay + uy * dist - h / 2, w, h };
+                                if (r.x < mapL || r.x + w > mapR || r.y < mapT || r.y + h > mapB) continue;
+                                if (placed.some(o => r.x < o.x + o.w + 8 && r.x + w + 8 > o.x && r.y < o.y + o.h + 6 && r.y + h + 6 > o.y)) continue;
+                                const pad = 10;
+                                let cost = routePts.reduce((n, q) => n + (q.x > r.x - pad && q.x < r.x + w + pad && q.y > r.y - pad && q.y < r.y + h + pad ? 1 : 0), 0);
+                                // keep labels off other callouts' dots, and pointer lines clear of other labels and dots
+                                cost += mapCallouts.reduce((n, o) => n + (o !== c && o.ax > r.x - 12 && o.ax < r.x + w + 12 && o.ay > r.y - 12 && o.ay < r.y + h + 12 ? 40 : 0), 0);
+                                const ex = Math.max(r.x, Math.min(ax, r.x + w)), ey = Math.max(r.y, Math.min(ay, r.y + h));
+                                for (let k = 1; k < 10; k++) {
+                                    const sx = ex + (ax - ex) * k / 10, sy = ey + (ay - ey) * k / 10;
+                                    if (placed.some(o => sx > o.x - 4 && sx < o.x + o.w + 4 && sy > o.y - 4 && sy < o.y + o.h + 4)) cost += 15;
+                                    if (mapCallouts.some(o => o !== c && Math.hypot(o.ax - sx, o.ay - sy) < 10)) cost += 10;
+                                }
+                                cost += dist / 40; // prefer closer spots when equally clear
+                                if (!best || cost < best.cost) best = { r, cost };
+                            }
+                            if (best && best.cost < 6) break;
+                        }
+                        if (!best) best = { r: { x: Math.min(mapR - w, ax + 18), y: Math.max(mapT, ay - 40), w, h } };
+                        c.r = best.r;
+                        placed.push(best.r);
+                    });
+                    // Draw pointer lines first, then dots, then labels, so labels always sit on top
+                    const colorOf = c => c.kind === 'drift' ? '#f59e0b' : '#ef4444';
+                    ctx.save();
+                    ctx.lineCap = 'round';
+                    mapCallouts.forEach(c => {
+                        const ex = Math.max(c.r.x, Math.min(c.ax, c.r.x + c.r.w)), ey = Math.max(c.r.y, Math.min(c.ay, c.r.y + c.r.h));
+                        ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(c.ax, c.ay);
+                        ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)'; ctx.lineWidth = 5; ctx.stroke();
+                        ctx.strokeStyle = colorOf(c); ctx.lineWidth = 2.2; ctx.stroke();
+                    });
+                    mapCallouts.forEach(c => {
+                        ctx.beginPath(); ctx.arc(c.ax, c.ay, c.kind === 'drift' ? 6 : 5, 0, Math.PI * 2);
+                        ctx.fillStyle = colorOf(c); ctx.fill();
+                        ctx.lineWidth = 2; ctx.strokeStyle = c.kind === 'drift' ? '#0f172a' : '#ffffff'; ctx.stroke();
+                    });
+                    mapCallouts.forEach(c => {
+                        const { x, y, w, h } = c.r;
+                        ctx.font = 'bold 13px JetBrains Mono, monospace';
+                        ctx.textAlign = 'left';
+                        if (c.kind === 'drift') {
+                            drawRoundedRect(ctx, x, y, w, h, h / 2);
+                            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)'; ctx.fill();
+                            ctx.lineWidth = 2; ctx.strokeStyle = '#f59e0b'; ctx.stroke();
+                            // the same orange letter circle as on its zoom box
+                            ctx.beginPath(); ctx.arc(x + 14, y + h / 2, 10, 0, Math.PI * 2);
+                            ctx.fillStyle = '#f59e0b'; ctx.fill();
+                            ctx.fillStyle = '#0f172a';
+                            ctx.font = 'bold 13px Inter, system-ui, sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(c.letter, x + 14, y + h / 2 + 4.5);
+                            ctx.textAlign = 'left';
+                            ctx.font = 'bold 13px JetBrains Mono, monospace';
+                            ctx.fillStyle = '#fbbf24';
+                            ctx.fillText(c.text, x + 32, y + h / 2 + 4.5);
+                        } else {
+                            drawRoundedRect(ctx, x, y, w, h, 6);
+                            ctx.fillStyle = '#ef4444'; ctx.fill();
+                            ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(15, 23, 42, 0.6)'; ctx.stroke();
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillText(c.text, x + 8, y + 17);
+                        }
+                    });
+                    ctx.restore();
                 }
 
                 // Map Compass Rose
@@ -6902,14 +6988,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
 
-                    // Numbered Amber Badge (#1 - #4)
-                    drawRoundedRect(ctx, bx + 12, by + 9, 34, 26, 7);
+                    // Lettered amber badge, drawn exactly like its marker on the main map
+                    ctx.beginPath();
+                    ctx.arc(bx + 29, by + 22, 13, 0, Math.PI * 2);
                     ctx.fillStyle = '#f59e0b';
                     ctx.fill();
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.stroke();
                     ctx.fillStyle = '#0f172a';
-                    ctx.font = 'bold 14px JetBrains Mono, monospace';
+                    ctx.font = 'bold 15px Inter, system-ui, sans-serif';
                     ctx.textAlign = 'center';
-                    ctx.fillText(`#${hs.rank}`, bx + 29, by + 27);
+                    ctx.fillText(hsLetter(hs.rank), bx + 29, by + 27);
 
                     // Timestamp & Distance Pill on right of header strip (measured first to protect against overlap)
                     const rightMetaText = `@${formatDuration(hs.t)} • ${hs.distKm} km`;
@@ -6925,8 +7015,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
                     ctx.font = 'bold 14px Inter, sans-serif';
                     const maxDriftTitleW = Math.max(60, subBoxW - 54 - rightMetaW - 20);
                     const driftLabelText = (isRefMode && hsChalTrk)
-                        ? `${hs.offsetMeters.toFixed(1)}m (${hsChalTrk.name})`
-                        : `DRIFT: ${hs.offsetMeters.toFixed(1)}m`;
+                        ? `${hs.offsetMeters.toFixed(1)} m (${hsChalTrk.name})`
+                        : `Drift ${hs.offsetMeters.toFixed(1)} m`;
                     ctx.fillText(fitTextWithEllipsis(ctx, driftLabelText, maxDriftTitleW), bx + 54, by + 27);
 
                     ctx.restore();
@@ -7119,21 +7209,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
                         ctx.fillStyle = isDark ? '#1e293b' : '#f1f5f9';
                         ctx.fill();
 
+                        // Same red label as on the map
+                        const tag = `DROPOUT ${dropoutNo.get(dr) || dr.index}`;
+                        ctx.font = 'bold 13px JetBrains Mono, monospace';
+                        const tagW = ctx.measureText(tag).width + 16;
+                        drawRoundedRect(ctx, sideLeft + 36, ry + 11, tagW, 24, 6);
+                        ctx.fillStyle = '#ef4444';
+                        ctx.fill();
+                        ctx.fillStyle = '#ffffff';
+                        ctx.textAlign = 'left';
+                        ctx.fillText(tag, sideLeft + 44, ry + 28);
+
+                        const tx = sideLeft + 36 + tagW + 12, tMax = sideW - 48 - (tagW + 24);
                         ctx.beginPath();
-                        ctx.arc(sideLeft + 44, ry + 23, 6, 0, Math.PI * 2);
+                        ctx.arc(tx + 5, ry + 14, 5, 0, Math.PI * 2);
                         ctx.fillStyle = trk.color;
                         ctx.fill();
-
                         ctx.fillStyle = textMain;
                         ctx.font = 'bold 14px JetBrains Mono, monospace';
-                        ctx.textAlign = 'left';
-                        const rowTitle = `#${dr.index} ${trk.name} • @${formatDuration(dr.startElapsedSec)} (${dr.distKm} km)`;
-                        ctx.fillText(fitTextWithEllipsis(ctx, rowTitle, sideW - 95), sideLeft + 60, ry + 19);
+                        const rowTitle = `${trk.name} • @${formatDuration(dr.startElapsedSec)} (${dr.distKm} km)`;
+                        ctx.fillText(fitTextWithEllipsis(ctx, rowTitle, tMax - 16), tx + 16, ry + 19);
 
                         ctx.fillStyle = '#f59e0b';
                         ctx.font = '600 13px JetBrains Mono, monospace';
                         const rowSub = `${dr.reason} — Lost ${dr.durationSec}s / ${dr.distanceJumpMeters}m gap`;
-                        ctx.fillText(fitTextWithEllipsis(ctx, rowSub, sideW - 95), sideLeft + 60, ry + 38);
+                        ctx.fillText(fitTextWithEllipsis(ctx, rowSub, tMax), tx, ry + 38);
                     }
                 }
             }
