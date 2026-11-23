@@ -2190,6 +2190,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.15',
+                date: '23 Nov 2026',
+                changes: [
+                    'GPS export: kilometre markers are always visible. They sit above dropout lines, labels keep clear of them, and a marker that lands on a drift or dropout dot moves just off the route with a short tick back to its spot.'
+                ]
+            },
+            {
                 version: '2.14',
                 date: '23 Nov 2026',
                 changes: [
@@ -5909,27 +5916,19 @@
                     ctx.stroke();
                 }
 
-                // PASS 3B: 1 km Split Markers along primary track — drawn after ALL tracks so no track covers them
+                // PASS 3B: 1 km split markers along the primary track. Positions only here: they're drawn in PASS 5,
+                // above the dropout dashes, and callout labels are kept clear of them, so they're never covered.
                 const splitTrk = activeTracks[0];
                 const splitPts = splitTrk.points.filter(p => p.lat != null && p.lon != null);
+                const kmMarkers = [];
                 if (showSplits && splitPts.length > 1) {
                     let nextKm = 1000;
                     for (let i = 1; i < splitPts.length; i++) {
                         if (splitPts[i].distMeters >= nextKm) {
                             const pos = projectLatLon(splitPts[i].lat, splitPts[i].lon);
-                            const kmNum = Math.round(nextKm / 1000);
-                            ctx.beginPath();
-                            ctx.arc(pos.x, pos.y, 13, 0, Math.PI * 2);
-                            ctx.fillStyle = isDark ? '#0f172a' : '#ffffff';
-                            ctx.fill();
-                            ctx.lineWidth = 2.5;
-                            ctx.strokeStyle = splitTrk.color;
-                            ctx.stroke();
-
-                            ctx.fillStyle = textMain;
-                            ctx.font = 'bold 12px JetBrains Mono, monospace';
-                            ctx.textAlign = 'center';
-                            ctx.fillText(`${kmNum}k`, pos.x, pos.y + 4);
+                            const q0 = projectLatLon(splitPts[Math.max(0, i - 5)].lat, splitPts[Math.max(0, i - 5)].lon);
+                            const q1 = projectLatLon(splitPts[Math.min(splitPts.length - 1, i + 5)].lat, splitPts[Math.min(splitPts.length - 1, i + 5)].lon);
+                            kmMarkers.push({ x: pos.x, y: pos.y, rx: pos.x, ry: pos.y, dx: q1.x - q0.x, dy: q1.y - q0.y, label: `${Math.round(nextKm / 1000)}k` });
                             nextKm += 1000;
                         }
                     }
@@ -5993,7 +5992,7 @@
                         mapCallouts.push({ kind: 'drift', letter: hsLetter(hs.rank), text: `${hs.offsetMeters.toFixed(1)} m`, pStart: pos, pEnd: pos });
                     });
                 }
-                if (mapCallouts.length) {
+                {
                     const mapL = 60 + 8, mapR = 60 + mapCardW - 8, mapT = mapCardTop + 8, mapB = mapCardTop + mapCardH - 50;
                     const routePts = [];
                     activeTracks.forEach(t => {
@@ -6003,6 +6002,19 @@
                     });
                     // Anchor = the dot each pointer line ends at (drift spot, or the middle of a dropout's dashed line)
                     mapCallouts.forEach(c => { c.ax = (c.pStart.x + c.pEnd.x) / 2; c.ay = (c.pStart.y + c.pEnd.y) / 2; });
+                    // A km marker sitting on a drift/dropout dot (or another km marker) is moved just off the route,
+                    // with a short tick back to its exact spot, so both stay visible
+                    const KM_R = 13;
+                    kmMarkers.forEach((m, mi) => {
+                        const clash = (x, y) => mapCallouts.some(c => Math.hypot(c.ax - x, c.ay - y) < KM_R + 9) ||
+                            kmMarkers.some((o, oi) => oi < mi && Math.hypot(o.x - x, o.y - y) < KM_R * 2 + 4);
+                        if (!clash(m.x, m.y)) return;
+                        const l = Math.hypot(m.dx, m.dy) || 1, px = -m.dy / l, py = m.dx / l;
+                        for (const d of [30, -30, 44, -44]) {
+                            const x = m.rx + px * d, y = m.ry + py * d;
+                            if (!clash(x, y) && x > mapL + KM_R && x < mapR - KM_R && y > mapT + KM_R && y < mapB - KM_R) { m.x = x; m.y = y; m.moved = true; break; }
+                        }
+                    });
                     ctx.save();
                     mapCallouts.forEach(c => {
                         ctx.font = c.kind === 'drift' ? 'bold 13px JetBrains Mono, monospace' : 'bold 13px JetBrains Mono, monospace';
@@ -6030,6 +6042,7 @@
                                 const r = { x: ax + ux * dist - w / 2, y: ay + uy * dist - h / 2, w, h };
                                 if (r.x < mapL || r.x + w > mapR || r.y < mapT || r.y + h > mapB) continue;
                                 if (placed.some(o => r.x < o.x + o.w + 8 && r.x + w + 8 > o.x && r.y < o.y + o.h + 6 && r.y + h + 6 > o.y)) continue;
+                                if (kmMarkers.some(m => m.x > r.x - KM_R - 6 && m.x < r.x + w + KM_R + 6 && m.y > r.y - KM_R - 6 && m.y < r.y + h + KM_R + 6)) continue;
                                 const pad = 10;
                                 let cost = routePts.reduce((n, q) => n + (q.x > r.x - pad && q.x < r.x + w + pad && q.y > r.y - pad && q.y < r.y + h + pad ? 1 : 0), 0);
                                 // keep labels off other callouts' dots, and pointer lines clear of other labels and dots
@@ -6039,6 +6052,7 @@
                                     const sx = ex + (ax - ex) * k / 10, sy = ey + (ay - ey) * k / 10;
                                     if (placed.some(o => sx > o.x - 4 && sx < o.x + o.w + 4 && sy > o.y - 4 && sy < o.y + o.h + 4)) cost += 15;
                                     if (mapCallouts.some(o => o !== c && Math.hypot(o.ax - sx, o.ay - sy) < 10)) cost += 10;
+                                    if (kmMarkers.some(m => Math.hypot(m.x - sx, m.y - sy) < KM_R + 4)) cost += 12;
                                 }
                                 cost += dist / 40; // prefer closer spots when equally clear
                                 if (!best || cost < best.cost) best = { r, cost };
@@ -6063,6 +6077,23 @@
                         ctx.beginPath(); ctx.arc(c.ax, c.ay, c.kind === 'drift' ? 6 : 5, 0, Math.PI * 2);
                         ctx.fillStyle = colorOf(c); ctx.fill();
                         ctx.lineWidth = 2; ctx.strokeStyle = c.kind === 'drift' ? '#0f172a' : '#ffffff'; ctx.stroke();
+                    });
+                    // Km markers: white with a ring in the primary track's colour
+                    const kmRing = splitTrk.color;
+                    kmMarkers.forEach(m => {
+                        if (m.moved) {
+                            ctx.beginPath(); ctx.moveTo(m.rx, m.ry); ctx.lineTo(m.x, m.y);
+                            ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)'; ctx.lineWidth = 4.5; ctx.stroke();
+                            ctx.strokeStyle = kmRing; ctx.lineWidth = 2; ctx.stroke();
+                            ctx.beginPath(); ctx.arc(m.rx, m.ry, 3.5, 0, Math.PI * 2); ctx.fillStyle = kmRing; ctx.fill();
+                        }
+                        ctx.beginPath(); ctx.arc(m.x, m.y, KM_R, 0, Math.PI * 2);
+                        ctx.fillStyle = '#ffffff'; ctx.fill();
+                        ctx.lineWidth = 2.5; ctx.strokeStyle = kmRing; ctx.stroke();
+                        ctx.fillStyle = '#0f172a';
+                        ctx.font = 'bold 12px JetBrains Mono, monospace';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(m.label, m.x, m.y + 4);
                     });
                     mapCallouts.forEach(c => {
                         const { x, y, w, h } = c.r;
