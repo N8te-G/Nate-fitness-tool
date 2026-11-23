@@ -147,13 +147,18 @@
                 linear-gradient(to bottom, rgba(56, 189, 248, 0.16) 1px, transparent 1px) !important;
             background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px !important;
         }
-        /* Sync offset slider: large thumb, filled track, horizontal drags go to the slider */
+        /* Sync offset slider: large thumb, filled track. On touch screens only the thumb can be dragged
+           (sideways); vertical swipes always scroll the page and taps on the track do nothing. */
         .offset-slider {
             -webkit-appearance: none;
             appearance: none;
             height: 32px;
             background: transparent;
-            touch-action: none;
+            touch-action: pan-y;
+        }
+        .offset-slider-wrap { touch-action: pan-y; }
+        @media (pointer: coarse) {
+            .offset-slider { pointer-events: none; }
         }
         .offset-slider::-webkit-slider-runnable-track {
             height: 6px;
@@ -2181,6 +2186,14 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.10',
+                date: '23 Nov 2026',
+                changes: [
+                    'Sync offset sliders on phones: only the knob can be dragged, and only sideways. Swiping up or down always scrolls the page and tapping the track does nothing, so offsets can\'t be changed by accident.',
+                    'GPS export: in the four biggest-drift boxes, the line between the two devices is now solid white, so it can\'t be mistaken for the dashed GPS-dropout markers.'
+                ]
+            },
+            {
                 version: '2.9',
                 date: '22 Nov 2026',
                 changes: [
@@ -2925,7 +2938,7 @@
                                 ${offsetFormatted}
                             </span>
                             </div>
-                            <input type="range" min="${sliderMin}" max="${sliderMax}" step="1" value="${offsetVal}" data-id="${trk.id}" class="offset-slider w-full cursor-pointer" style="--pct:${sliderPct}%" aria-label="Sync offset in seconds" />
+                            <div class="offset-slider-wrap"><input type="range" min="${sliderMin}" max="${sliderMax}" step="1" value="${offsetVal}" data-id="${trk.id}" class="offset-slider w-full cursor-pointer" style="--pct:${sliderPct}%" aria-label="Sync offset in seconds" /></div>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-1">
@@ -2971,6 +2984,54 @@
                         updateAllVisuals();
                     }
                 });
+            });
+
+            // Touch screens: drag the thumb only (handled here, as the native slider ignores touches there)
+            container.querySelectorAll('.offset-slider-wrap').forEach(wrap => {
+                const slider = wrap.querySelector('.offset-slider');
+                if (!slider || !window.matchMedia('(pointer: coarse)').matches) return;
+                const THUMB = 22, GRAB = 26; // thumb width; how far from its centre a touch still grabs it
+                let drag = null;
+                const geom = () => {
+                    const r = slider.getBoundingClientRect();
+                    const min = +slider.min, max = +slider.max, val = +slider.value;
+                    const usable = r.width - THUMB;
+                    return { r, min, max, val, usable, thumbX: r.left + THUMB / 2 + ((val - min) / (max - min)) * usable };
+                };
+                wrap.addEventListener('pointerdown', e => {
+                    if (e.pointerType === 'mouse') return;
+                    const g = geom();
+                    if (Math.abs(e.clientX - g.thumbX) > GRAB) return; // not on the thumb: let the page scroll
+                    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, v0: g.val, g, moved: false, sideways: false };
+                    wrap.setPointerCapture(e.pointerId);
+                });
+                wrap.addEventListener('pointermove', e => {
+                    if (!drag || e.pointerId !== drag.id) return;
+                    const { g } = drag;
+                    // Only start moving once the finger clearly goes sideways (a scroll that starts on the knob
+                    // won't nudge the value); x0 restarts from there so the value doesn't jump
+                    if (!drag.sideways) {
+                        const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+                        if (Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { drag = null; return; }
+                        if (Math.abs(dx) < 8) return;
+                        drag.sideways = true;
+                        drag.x0 = e.clientX;
+                    }
+                    const v = Math.round(Math.min(g.max, Math.max(g.min, drag.v0 + (e.clientX - drag.x0) / g.usable * (g.max - g.min))));
+                    if (v !== +slider.value) {
+                        slider.value = String(v);
+                        drag.moved = true;
+                        slider.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+                const end = e => {
+                    if (!drag || e.pointerId !== drag.id) return;
+                    const moved = drag.moved;
+                    drag = null;
+                    if (moved) slider.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+                wrap.addEventListener('pointerup', end);
+                wrap.addEventListener('pointercancel', end); // a vertical swipe turned into a page scroll
             });
 
             container.querySelectorAll('.offset-slider').forEach(slider => {
@@ -5985,17 +6046,21 @@
                         ctx.stroke();
                     });
 
-                    // Draw dashed drift vector between Reference Track (ptA) and Challenger Track (ptB)
+                    // Drift line between the Reference Track (ptA) and the Challenger Track (ptB) at the same moment
                     const ptA = projectSubLatLon(hs.latA, hs.lonA);
                     const ptB = projectSubLatLon(hs.latB, hs.lonB);
 
+                    // Solid white line with a dark outline (so it can't be mistaken for the dashed dropout markers)
                     ctx.save();
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.setLineDash([6, 4]);
                     ctx.moveTo(ptA.x, ptA.y);
                     ctx.lineTo(ptB.x, ptB.y);
-                    ctx.strokeStyle = '#facc15';
-                    ctx.lineWidth = 3.2;
+                    ctx.strokeStyle = 'rgba(15, 23, 42, 0.75)';
+                    ctx.lineWidth = 6;
+                    ctx.stroke();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2.6;
                     ctx.stroke();
                     ctx.restore();
 
