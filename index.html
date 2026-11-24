@@ -37,7 +37,7 @@
     <title>TrueTrace — Multi-device Heart Rate & GPS Comparison</title>
     <!-- Tailwind CSS -->
     <!-- Styles: prebuilt Tailwind CSS (rebuild with `npm run build:css` after changing classes) -->
-    <link rel="stylesheet" href="./vendor/tailwind.css?v=d8ab82de74">
+    <link rel="stylesheet" href="./vendor/tailwind.css?v=615a1eb3a9">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2190,6 +2190,15 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.16',
+                date: '24 Nov 2026',
+                changes: [
+                    'Reference vs All: each device now gets its own score and verdict on the match cards, instead of an average across devices. The averaged badge on the exports is gone, since every device\'s verdict is in the table.',
+                    'GPS export: kilometre markers also keep clear of short dropout lines, moving just off the route when they would cover one.',
+                    'GPS export table: "1 drop" instead of "1 drops".'
+                ]
+            },
+            {
                 version: '2.15',
                 date: '23 Nov 2026',
                 changes: [
@@ -2782,6 +2791,23 @@
             if (score >= 70) return { label: 'Fair agreement', short: 'Fair', cls: 'text-amber-500', color: '#f59e0b' };
             return { label: 'Poor agreement', short: 'Poor', cls: 'text-rose-500', color: '#f43f5e' };
         }
+        // Reference vs All: one row per device with its own score and verdict (no averaging across devices)
+        function perDeviceVerdictRows(list, scoreOf, hasDropouts, dropWord) {
+            return list.slice().sort((a, b) => scoreOf(b) - scoreOf(a)).map(c => {
+                const sc = scoreOf(c), band = hrBand(sc);
+                return `<div class="min-w-0 py-0.5">
+                    <div class="flex items-center gap-1.5 min-w-0">
+                        <span class="w-2 h-2 rounded-full shrink-0" style="background:${c.challenger.color}"></span>
+                        <span class="truncate text-slate-500 dark:text-slate-400" title="${escapeHtml(c.challenger.name)}">${escapeHtml(c.challenger.name)}</span>
+                    </div>
+                    <div class="pl-3.5 whitespace-nowrap">
+                        <span class="font-mono font-bold ${band.cls}">${sc}%</span>
+                        <span class="font-semibold ${band.cls}">${band.short}${hasDropouts(c.sim) ? ` · ${dropWord}` : ''}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
         // GPS: same four bands, plus a note when the device had GPS dropouts (missed over 5% of the time)
         function gpsHasDropouts(sim) {
             return !!sim && sim.gpsCoveragePct != null && sim.gpsCoveragePct < 95;
@@ -3322,6 +3348,7 @@
             const elVerdict = document.getElementById('metricVerdict');
             const elScoreParts = document.getElementById('metricScoreParts');
             if (elScoreParts) elScoreParts.textContent = '';
+            elMatch.classList.remove('hidden');
             const elCorr = document.getElementById('metricCorrelation');
             const elMAE = document.getElementById('metricMAE');
             const elRMSE = document.getElementById('metricRMSE');
@@ -3394,9 +3421,10 @@
                 const worstMaxDiff = refComparisons.length ? Math.max(...refComparisons.map(c => c.sim.maxDiff)) : 0;
                 const totalOverlap = refComparisons.reduce((s, c) => s + c.sim.overlapCount, 0);
 
-                elMatch.textContent = `${avgMatch}%`;
-                elMatch.className = `text-2xl font-bold font-mono mt-1 ${hrBand(avgMatch).cls}`;
-                elVerdict.textContent = `Avg across ${refComparisons.length} challenger${refComparisons.length > 1 ? 's' : ''}`;
+                // Each device keeps its own score and verdict; an average of different devices wouldn't describe any of them
+                elMatch.classList.add('hidden');
+                elVerdict.innerHTML = `<div class="mt-1.5 space-y-0.5 text-xs">${perDeviceVerdictRows(refComparisons, c => c.sim.matchScore, hrHasDropouts, 'dropouts')}</div>`;
+                if (elScoreParts) elScoreParts.textContent = 'Details for each device in the table below';
                 elCorr.textContent = avgCorr.toFixed(3);
                 elMAE.textContent = `${avgMAE} bpm`;
                 elRMSE.textContent = `Mean RMSE: ${avgRMSE} bpm`;
@@ -3456,10 +3484,9 @@
                     const totalChalDrops = validGpsComps.reduce((s, c) => s + c.challenger.stats.dropoutCount, 0);
                     const totalChalDropSec = +validGpsComps.reduce((s, c) => s + c.challenger.stats.totalDropoutSec, 0).toFixed(1);
 
-                    elGpsMatch.textContent = `${avgGpsScore}%`;
-                    elGpsMatch.className = `text-sm font-bold font-mono mt-0.5 ${hrBand(avgGpsScore).cls}`;
-                    const avgGpsLost = +(validGpsComps.reduce((s, c) => s + gpsDropoutPointsLost(c.sim), 0) / gCount).toFixed(1);
-                    elGpsWithin5.textContent = `${hrBand(avgGpsScore).label} · ${avgGpsLost > 0 ? `avg −${avgGpsLost} pts dropouts` : 'no dropouts'}`;
+                    elGpsMatch.textContent = '';
+                    elGpsMatch.className = 'hidden';
+                    elGpsWithin5.innerHTML = `<div class="mt-1 space-y-0.5 text-left text-[11px] font-sans">${perDeviceVerdictRows(validGpsComps, c => c.sim.gpsMatchScore, gpsHasDropouts, 'dropouts')}</div>`;
                     elGpsMean.textContent = `±${avgGpsMean} m`;
                     elGpsMax.textContent = `Worst drift: ${worstGpsMax} m`;
                     elGpsDistCmp.textContent = `Ref: ${(gpsTrkA.stats.distanceMeters / 1000).toFixed(2)} km`;
@@ -5013,28 +5040,8 @@
 
             if (isRefMode && trkA && refComparisons.length > 0) {
                 // Reference vs All Mode: Render Multi-Device Comparison Table vs Master Reference
-                const avgMatch = +(refComparisons.reduce((s, c) => s + c.sim.matchScore, 0) / refComparisons.length).toFixed(1);
-                const fullVerdictLabel = `AVG MATCH ACROSS ${refComparisons.length} CHALLENGER${refComparisons.length > 1 ? 'S' : ''}: ${avgMatch}%`;
-                const verdictColor = hrBand(avgMatch).color;
-
-                ctx.font = 'bold 16px JetBrains Mono, monospace';
-                const verdictTextW = ctx.measureText(fullVerdictLabel).width;
-                const badgePadX = 16;
-                const badgeW = verdictTextW + badgePadX * 2;
-                const badgeX = W - 92 - badgeW;
-                const badgeY = footerTop + 18;
-
-                drawRoundedRect(ctx, badgeX, badgeY, badgeW, 32, 8);
-                ctx.fillStyle = isDark ? 'rgba(30, 41, 59, 0.9)' : 'rgba(241, 245, 249, 0.95)';
-                ctx.fill();
-                ctx.lineWidth = 1.5;
-                ctx.strokeStyle = verdictColor;
-                ctx.stroke();
-
-                ctx.fillStyle = verdictColor;
-                ctx.textAlign = 'right';
-                ctx.fillText(fullVerdictLabel, W - 92 - badgePadX, footerTop + 39);
-
+                // No averaged badge: each device has its own score and verdict in the table below
+                const badgeX = W - 92;
                 const refHeaderTitle = `MASTER REFERENCE COMPARISON  —  ALL TRACKS vs. ★ ${trkA.name}`;
                 ctx.textAlign = 'left';
                 ctx.fillStyle = textMain;
@@ -6006,11 +6013,18 @@
                     // with a short tick back to its exact spot, so both stay visible
                     const KM_R = 13;
                     kmMarkers.forEach((m, mi) => {
-                        const clash = (x, y) => mapCallouts.some(c => Math.hypot(c.ax - x, c.ay - y) < KM_R + 9) ||
+                        // distance from (x, y) to a dropout's dashed line (start → end)
+                        const segDist = (x, y, a, b) => {
+                            const vx = b.x - a.x, vy = b.y - a.y, l2 = vx * vx + vy * vy;
+                            const t = l2 ? Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / l2)) : 0;
+                            return Math.hypot(x - (a.x + t * vx), y - (a.y + t * vy));
+                        };
+                        const clash = (x, y) => mapCallouts.some(c => Math.hypot(c.ax - x, c.ay - y) < KM_R + 9 ||
+                                (c.kind === 'dropout' && (segDist(x, y, c.pStart, c.pEnd) < KM_R + 6 || Math.hypot(c.pStart.x - x, c.pStart.y - y) < KM_R + 18))) ||
                             kmMarkers.some((o, oi) => oi < mi && Math.hypot(o.x - x, o.y - y) < KM_R * 2 + 4);
                         if (!clash(m.x, m.y)) return;
                         const l = Math.hypot(m.dx, m.dy) || 1, px = -m.dy / l, py = m.dx / l;
-                        for (const d of [30, -30, 44, -44]) {
+                        for (const d of [30, -30, 44, -44, 60, -60]) {
                             const x = m.rx + px * d, y = m.ry + py * d;
                             if (!clash(x, y) && x > mapL + KM_R && x < mapR - KM_R && y > mapT + KM_R && y < mapB - KM_R) { m.x = x; m.y = y; m.moved = true; break; }
                         }
@@ -6612,30 +6626,8 @@
 
             if (isRefMode && trkA && refComparisons.length > 0) {
                 const validGpsComps = refComparisons.filter(rc => rc.sim.gpsMatchScore != null);
-                const avgGpsScore = validGpsComps.length > 0
-                    ? +(validGpsComps.reduce((s, c) => s + c.sim.gpsMatchScore, 0) / validGpsComps.length).toFixed(1)
-                    : 0;
-                const fullVerdictLabel = `AVG GPS MATCH ACROSS ${validGpsComps.length} CHALLENGER${validGpsComps.length === 1 ? '' : 'S'}: ${avgGpsScore}%`;
-                const verdictColor = hrBand(avgGpsScore).color;
-
-                ctx.font = 'bold 16px JetBrains Mono, monospace';
-                const verdictTextW = ctx.measureText(fullVerdictLabel).width;
-                const badgePadX = 16;
-                const badgeW = verdictTextW + badgePadX * 2;
-                const badgeX = W - 92 - badgeW;
-                const badgeY = footerTop + 18;
-
-                drawRoundedRect(ctx, badgeX, badgeY, badgeW, 32, 8);
-                ctx.fillStyle = isDark ? 'rgba(30, 41, 59, 0.9)' : 'rgba(241, 245, 249, 0.95)';
-                ctx.fill();
-                ctx.lineWidth = 1.5;
-                ctx.strokeStyle = verdictColor;
-                ctx.stroke();
-
-                ctx.fillStyle = verdictColor;
-                ctx.textAlign = 'right';
-                ctx.fillText(fullVerdictLabel, W - 92 - badgePadX, footerTop + 39);
-
+                // No averaged badge: each device has its own score and verdict in the table below
+                const badgeX = W - 92;
                 const refHeaderTitle = `MASTER REFERENCE GPS COMPARISON  —  ALL TRACKS vs. ★ ${trkA.name}`;
                 ctx.textAlign = 'left';
                 ctx.fillStyle = textMain;
@@ -6695,7 +6687,7 @@
                     ctx.fillText(`${gSim.maxGpsOffset}m (P95 ${gSim.p95GpsOffset}m)`, cols[4].x, textY);
 
                     ctx.fillStyle = challenger.stats.dropoutCount === 0 ? '#10b981' : '#f43f5e';
-                    ctx.fillText(`${challenger.stats.dropoutCount} drops (${challenger.stats.totalDropoutSec}s lost)`, cols[5].x, textY);
+                    ctx.fillText(`${challenger.stats.dropoutCount} drop${challenger.stats.dropoutCount === 1 ? "" : "s"} (${challenger.stats.totalDropoutSec}s lost)`, cols[5].x, textY);
 
                     const dSign = gSim.distDiffMeters > 0 ? '+' : '';
                     ctx.fillStyle = '#14b8a6';
