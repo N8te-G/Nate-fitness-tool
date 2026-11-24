@@ -2190,6 +2190,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.17',
+                date: '24 Nov 2026',
+                changes: [
+                    'With three or more devices loaded, the page and both exports now start in Reference vs All mode (you can still switch to Pairwise).'
+                ]
+            },
+            {
                 version: '2.16',
                 date: '24 Nov 2026',
                 changes: [
@@ -6845,6 +6852,7 @@
 
             isHandlingFiles = true;
             if (state.tracks.length === 0) state.workoutType = ''; // a new workout: don't carry the old label over
+            const tracksBefore = state.tracks.length;
             const fileInputEl = document.getElementById('fileInput');
             const browseBtn = document.getElementById('browseFilesBtn');
             const originalBtnHtml = browseBtn ? browseBtn.innerHTML : '';
@@ -6877,6 +6885,12 @@
                     // Automatically synchronize all tracks by recording clock
                     if (state.tracks.length >= 2) {
                         autoSyncTracksByGpsClock(true);
+                    }
+
+                    // With 3 or more devices, compare them all against the reference by default (page and exports).
+                    // Only when this load takes it past two devices, so a later manual switch to Pairwise is kept.
+                    if (tracksBefore <= 2 && state.tracks.length >= 3 && state.comparisonMode !== 'reference') {
+                        setComparisonMode('reference');
                     }
 
                     // Render all cards, dropdowns, charts, map tracks, and tables
@@ -6950,6 +6964,7 @@
                 clearAllBtn.addEventListener('click', () => {
                     state.tracks = [];
                     state.workoutType = '';
+                    setComparisonMode('pairwise'); // start fresh: two devices are compared pairwise
                     ensureValidCompareSelection();
                     updateAllVisuals();
                     showToast('Cleared all loaded activity tracks.');
