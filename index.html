@@ -493,6 +493,7 @@
                                 <th class="py-2 px-3 font-semibold">MAE / RMSE</th>
                                 <th class="py-2 px-3 font-semibold">Within ±2 / ±5 BPM</th>
                                 <th class="py-2 px-3 font-semibold">Max Spike Diff</th>
+                                <th class="py-2 px-3 font-semibold" title="How close each device got to the reference's peaks, and how quickly">Peaks</th>
                                 <th class="py-2 px-3 font-semibold">Avg / Peak HR</th>
                                 <th class="py-2 px-3 font-semibold">Verdict</th>
                             </tr>
@@ -2190,6 +2191,13 @@
         // ===== Version & change log (newest first; add a new entry at the top for each release) =====
         const CHANGELOG = [
             {
+                version: '2.18',
+                date: '26 Nov 2026',
+                changes: [
+                    'New: Peak capture. For each clear heart-rate peak on the reference, how close each device got and how quickly, e.g. "7 bpm low · 7 s late". Shown in the Reference vs All tables (page and export) and under Max Spike in pairwise mode.'
+                ]
+            },
+            {
                 version: '2.17',
                 date: '24 Nov 2026',
                 changes: [
@@ -2555,6 +2563,41 @@
             // Composite Match Score (0 - 100%)
             const maePenalty = Math.max(0, 100 - mae * 4.5);
             const corrScore = Math.max(0, r) * 100;
+            // Peak capture: for each clear peak in A (highest point within ±40 s, at least 10 bpm above the lowest
+            // point within ±60 s), how high B got (its highest reading from 20 s before to 45 s after) and when.
+            // Reported as medians: e.g. B's peaks are typically 7 bpm lower than A's and 4 s later.
+            let peakCapture = null;
+            {
+                const aT = ptsA.map(p => p.elapsedSec + offsetA), aH = ptsA.map(p => p.hr);
+                const t0 = pairs[0].t, t1 = pairs[n - 1].t;
+                const diffs = [], delays = [];
+                let lo = 0, hi = 0, lo60 = 0, hi60 = 0;
+                for (let i = 0; i < aT.length; i++) {
+                    const t = aT[i];
+                    if (t < t0 || t > t1) continue;
+                    while (aT[lo] < t - 40) lo++;
+                    while (hi < aT.length - 1 && aT[hi + 1] <= t + 40) hi++;
+                    while (aT[lo60] < t - 60) lo60++;
+                    while (hi60 < aT.length - 1 && aT[hi60 + 1] <= t + 60) hi60++;
+                    let isMax = true;
+                    for (let k = lo; k <= hi; k++) if (aH[k] > aH[i] || (aH[k] === aH[i] && k < i)) { isMax = false; break; }
+                    if (!isMax) continue;
+                    let mn = Infinity;
+                    for (let k = lo60; k <= hi60; k++) mn = Math.min(mn, aH[k]);
+                    if (aH[i] - mn < 10) continue;
+                    // B's highest reading near this peak
+                    let a = 0, b = bTimes.length - 1;
+                    while (a < b) { const m = (a + b) >> 1; if (bTimes[m] < t - 20) a = m + 1; else b = m; }
+                    let best = -Infinity, bestT = null;
+                    for (let k = a; k < bTimes.length && bTimes[k] <= t + 45; k++) if (bHRs[k] > best) { best = bHRs[k]; bestT = bTimes[k]; }
+                    if (bestT == null) continue;
+                    diffs.push(best - aH[i]);
+                    delays.push(bestT - t);
+                }
+                const median = v => { const q = v.slice().sort((x, y) => x - y); return q[Math.floor(q.length / 2)]; };
+                if (diffs.length >= 3) peakCapture = { count: diffs.length, diff: Math.round(median(diffs)), delay: Math.round(median(delays)) };
+            }
+
             // Accuracy: how closely B agrees while it has a reading
             const accuracyScore = Math.min(100, Math.max(0, (maePenalty * 0.65 + corrScore * 0.35)));
             // Coverage: share of the shared recording time B actually had a heart-rate reading
@@ -2569,6 +2612,7 @@
                 matchScore: +matchScore.toFixed(1),
                 accuracyScore: +accuracyScore.toFixed(1),
                 hrDropoutCount: hrGapStarts.size,
+                peakCapture,
                 coveragePct: +coveragePct.toFixed(1),
                 correlation: +r.toFixed(3),
                 mae: +mae.toFixed(2),
@@ -2583,6 +2627,15 @@
         }
 
         // "Accuracy 90.4% · Coverage 88.9%" breakdown of the overall match score (null for GPS-only comparisons)
+        // Peak capture in words: "7 bpm low · 4 s late" (null when there were too few clear peaks)
+        function peakCaptureText(sim) {
+            const pc = sim && sim.peakCapture;
+            if (!pc) return null;
+            const level = Math.abs(pc.diff) <= 2 ? 'reaches peaks' : `${Math.abs(pc.diff)} bpm ${pc.diff < 0 ? 'low' : 'high'}`;
+            const timing = Math.abs(pc.delay) <= 1 ? 'on time' : `${Math.abs(pc.delay)} s ${pc.delay > 0 ? 'late' : 'early'}`;
+            return `${level} · ${timing}`;
+        }
+
         // "3 dropouts" / "1 dropout"
         function dropoutCountText(n) {
             return `${n} dropout${n === 1 ? '' : 's'}`;
@@ -3402,7 +3455,7 @@
                 if (refComparisons.length === 0 && gpsRefComparisons.length === 0) {
                     elMatch.textContent = '—';
                     elVerdict.textContent = 'Load 2+ visible tracks';
-                    hrRefBody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-slate-400 font-sans">Load at least one additional visible track to compare against <strong>${trkA.name}</strong>.</td></tr>`;
+                    hrRefBody.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-slate-400 font-sans">Load at least one additional visible track to compare against <strong>${trkA.name}</strong>.</td></tr>`;
                     gpsRefBody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-slate-400 font-sans">Load at least one additional visible track to compare against <strong>${gpsTrkA.name}</strong>.</td></tr>`;
                     return;
                 }
@@ -3460,6 +3513,7 @@
                             <td class="py-2.5 px-3">±${sim.mae} <span class="text-slate-400 text-[10px]">(RMSE ${sim.rmse})</span></td>
                             <td class="py-2.5 px-3 text-sky-400">${sim.within2Pct}% <span class="text-slate-400">/ ${sim.within5Pct}%</span></td>
                             <td class="py-2.5 px-3 text-rose-400">${sim.maxDiff} bpm</td>
+                            <td class="py-2.5 px-3 whitespace-nowrap">${peakCaptureText(sim) ? `<span class="text-violet-400">${peakCaptureText(sim)}</span> <span class="text-slate-400 text-[10px]">(${sim.peakCapture.count})</span>` : '<span class="text-slate-400">—</span>'}</td>
                             <td class="py-2.5 px-3">${challenger.stats.avgHR || '—'} ${avgDiffStr} / ${challenger.stats.maxHR || '—'}</td>
                             <td class="py-2.5 px-3 font-sans font-semibold ${scoreCls}">${verdictLabel} <span class="text-slate-400 font-mono text-[10px]">(${sim.overlapCount})</span></td>
                         </tr>
@@ -3562,7 +3616,7 @@
                 elWithin2.textContent = `${sim.within2Pct}%`;
                 elWithin5.textContent = `Within ±5 BPM: ${sim.within5Pct}%`;
                 elMaxDiff.textContent = `${sim.maxDiff} bpm`;
-                elOverlap.textContent = `${sim.overlapCount} synced samples`;
+                elOverlap.textContent = peakCaptureText(sim) ? `Peaks: ${peakCaptureText(sim)}` : `${sim.overlapCount} synced samples`;
                 elAvgCmp.textContent = `${trkA.stats.avgHR || '—'} vs ${trkB.stats.avgHR || '—'} bpm`;
                 elMaxCmp.textContent = `Peak: ${trkA.stats.maxHR || '—'} vs ${trkB.stats.maxHR || '—'} bpm`;
             }
@@ -5057,15 +5111,17 @@
 
                 // Table Columns
                 const cols = [
-                    { label: 'CHALLENGER DEVICE', x: 92, w: 400 },
-                    { label: 'OVERALL MATCH', x: 505, w: 245 },
-                    { label: 'PEARSON r', x: 765, w: 170 },
-                    { label: 'MAE / RMSE', x: 950, w: 265 },
-                    { label: 'WITHIN ±2 / ±5 BPM', x: 1230, w: 250 },
-                    { label: 'MAX SPIKE', x: 1495, w: 180 },
-                    { label: 'AVG / PEAK BPM', x: 1690, w: 260 },
-                    { label: 'VERDICT', x: 1965, w: 345 }
+                    { label: 'CHALLENGER DEVICE', w: 360 },
+                    { label: 'OVERALL MATCH', w: 235 },
+                    { label: 'PEARSON r', w: 130 },
+                    { label: 'MAE / RMSE', w: 240 },
+                    { label: 'WITHIN ±2 / ±5 BPM', w: 215 },
+                    { label: 'MAX SPIKE', w: 115 },
+                    { label: 'PEAKS', w: 250 },
+                    { label: 'AVG / PEAK BPM', w: 175 },
+                    { label: 'VERDICT', w: 300 }
                 ];
+                cols.reduce((x, c) => { c.x = x; return x + c.w + 18; }, 92);
 
                 const headerY = footerTop + 72;
                 ctx.fillStyle = textSub;
@@ -5123,12 +5179,16 @@
                     ctx.fillStyle = '#f43f5e';
                     ctx.fillText(`${sim.maxDiff} bpm`, cols[5].x, textY);
 
+                    // Peak capture
+                    ctx.fillStyle = '#8b5cf6';
+                    ctx.fillText(fitTextWithEllipsis(ctx, peakCaptureText(sim) || '—', cols[6].w), cols[6].x, textY);
+
                     // Avg / Peak
                     ctx.fillStyle = textSub;
                     ctx.font = '500 14px JetBrains Mono, monospace';
                     ctx.fillText(
-                        fitTextWithEllipsis(ctx, `${challenger.stats.avgHR || '—'} / ${challenger.stats.maxHR || '—'} bpm`, cols[6].w),
-                        cols[6].x,
+                        fitTextWithEllipsis(ctx, `${challenger.stats.avgHR || '—'} / ${challenger.stats.maxHR || '—'} bpm`, cols[7].w),
+                        cols[7].x,
                         textY
                     );
 
@@ -5136,8 +5196,8 @@
                     ctx.fillStyle = mColor;
                     ctx.font = 'bold 14px JetBrains Mono, monospace';
                     ctx.fillText(
-                        fitTextWithEllipsis(ctx, `${vLabel} (${sim.overlapCount} pts)`, cols[7].w),
-                        cols[7].x,
+                        fitTextWithEllipsis(ctx, `${vLabel} (${sim.overlapCount} pts)`, cols[8].w),
+                        cols[8].x,
                         textY
                     );
                 });
@@ -5191,7 +5251,7 @@
                     { label: 'MEAN ABS ERROR (MAE)', val: `±${sim.mae} BPM`, sub: `RMSE: ${sim.rmse} BPM`, color: '#f59e0b' },
                     { label: 'WITHIN ±2 BPM', val: `${sim.within2Pct}%`, sub: `Tight Sensor Lock`, color: '#0ea5e9' },
                     { label: 'WITHIN ±5 BPM', val: `${sim.within5Pct}%`, sub: `Clinical / Training Zone`, color: '#14b8a6' },
-                    { label: 'MAX SPIKE DEVIATION', val: `${sim.maxDiff} BPM`, sub: `Peak Instant Difference`, color: '#f43f5e' }
+                    { label: 'MAX SPIKE DEVIATION', val: `${sim.maxDiff} BPM`, sub: peakCaptureText(sim) ? `Peaks: ${peakCaptureText(sim)}` : `Peak Instant Difference`, color: '#f43f5e' }
                 ];
 
                 const boxW = (W - 184 - 5 * 20) / 6;
